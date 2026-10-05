@@ -1,0 +1,44 @@
+{
+	"$schema": "../node_modules/@companion-module/base/assets/manifest.schema.json",
+	"type": "connection",
+	"id": "pgpio-pgpio-plus",
+	"name": "PGPIO+",
+	"shortname": "PGPIO+",
+	"description": "Control and monitor a PGPIO+ GPIO tally board (32 GPI inputs / 32 GPO outputs) over a WebSocket connection",
+	"version": "0.0.0",
+	"license": "MIT",
+	"legacyIds": [],
+	"runtime": {
+		"type": "node26",
+		"api": "nodejs-ipc",
+		"apiVersion": "0.0.0",
+		"entrypoint": "../main.js"
+	},
+	"manufacturer": "PGPIO",
+	"products": [
+		"PGPIO+"
+	],
+	"keywords": [
+		"gpio",
+		"tally",
+		"pgpio",
+		"esp32",
+		"websocket",
+		"gpi",
+		"gpo"
+	],
+	"bonjourQueries": {
+		"bonjour_host": {
+			"type": "pgpio",
+			"protocol": "tcp"
+		}
+	},
+	"bugs": "https://github.com/hwsysnet/companion-module-pgpio-pgpio-plus/issues",
+	"maintainers": [
+		{
+			"name": "Stagehand",
+			"email": "stagehand.hegedus@gmail.com"
+		}
+	],
+	"repository": "git+https://github.com/hwsysnet/companion-module-pgpio-pgpio-plus.git"
+}

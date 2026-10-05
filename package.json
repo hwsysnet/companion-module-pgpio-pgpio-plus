@@ -1,0 +1,28 @@
+{
+  "name": "companion-module-pgpio-pgpio-plus",
+  "version": "1.0.0",
+  "description": "Bitfocus Companion module for the PGPIO+ GPIO tally board (32x GPI / 32x GPO over WebSocket)",
+  "main": "main.js",
+  "type": "module",
+  "scripts": {
+    "mock-device": "node mock-device/mock-esp32.js",
+    "check": "companion-module-check",
+    "package": "companion-module-build"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "@companion-module/base": "^2.1.3",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@companion-module/tools": "^3.1.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/hwsysnet/companion-module-pgpio-pgpio-plus.git"
+  },
+  "bugs": {
+    "url": "https://github.com/hwsysnet/companion-module-pgpio-pgpio-plus/issues"
+  },
+  "homepage": "https://github.com/hwsysnet/companion-module-pgpio-pgpio-plus#readme"
+}
