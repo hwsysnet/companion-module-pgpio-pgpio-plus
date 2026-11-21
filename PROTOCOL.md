@@ -103,6 +103,14 @@ mdns_txt_item_t txt[] = { { "id", id } };
 mdns_service_add(instance, "_pgpio", "_tcp", 32032, txt, 1);
 ```
 
+To check the advertisement from a computer on the same network:
+
+- macOS: `dns-sd -B _pgpio._tcp` lists `PGPIO+ <ID>`; `dns-sd -L "PGPIO+
+<ID>" _pgpio._tcp` shows the host name, port and the `id` TXT record.
+- Linux / Raspberry Pi: `avahi-browse -rt _pgpio._tcp`.
+- Companion: the board appears in the connection's **Auto-discover device**
+  dropdown as `PGPIO+ <ID> (<ip>:<port>)`; two boards appear as two entries.
+
 ## Connection lifecycle
 
 1. The module opens `ws://<host>:<port><path>`.

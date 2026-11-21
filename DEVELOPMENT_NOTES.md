@@ -42,7 +42,14 @@ Snapshot at the end of the 2026-11-21 session:
   `~/Projects/Companion-Dev-Modules/pgpio-plus`, which no longer exists).
 - Git: `main` is clean and in sync with
   `github.com/hwsysnet/companion-module-pgpio-pgpio-plus`. Tag `v1.5.0`
-  points to the 1.5.0 release commit.
+  points to the 1.5.0 release commit; the commits after it only touch
+  documentation.
+- Firmware: the unique mDNS instance and host name per board (PROTOCOL.md,
+  _Discovery_) was sent to the firmware developer on 2026-11-21 as a link
+  to PROTOCOL.md. Until boards run that firmware, every board shows up as
+  `pgpio-plus (ip:port)` in the discovery dropdown.
+- Discovery does not work on a Raspberry Pi running the CompanionPi image
+  (reported 2026-11-21, cause unknown, see [Open items](#open-items)).
 - `npm test` (34 tests), `npm run check`, ESLint with the Companion config
   and prettier all pass.
 - `pgpio-pgpio-plus-1.5.0.tgz` is in the project root for in-house devices
@@ -68,8 +75,9 @@ Next steps, in order:
 3. **Submit the version** on the portal: _My Connections_ → the module →
    _Submit Version_ → `v1.5.0`. Review feedback arrives on the portal; fixes
    go out as `1.5.1` and so on, following [Releasing](#releasing).
-4. Independently of the release: the [Open items](#open-items) below (real
-   ATEM test, lifecycle smoke test).
+4. Independently of the release: the [Open items](#open-items) below
+   (mDNS on CompanionPi, firmware check, real ATEM test, lifecycle smoke
+   test).
 
 ## Releasing
 
@@ -351,13 +359,35 @@ evaluates `isVisibleExpression` against the saved value, not the default.
 
 ## Open items
 
-1. Test _Tally from value_ and _GPI select_ with a real ATEM. The ATEM
+1. **mDNS discovery on CompanionPi.** On a Raspberry Pi with the
+   CompanionPi image the board does not appear under _Auto-discover
+   device_; entering the IP manually is the workaround (not yet confirmed
+   on the Pi). The module only declares the query in the
+   manifest; Companion does the browsing, so the cause is on the Pi or in
+   the network. No CompanionPi mDNS issue is known in bitfocus/companion.
+   Evidence still needed from the Pi:
+   - `avahi-browse -rt _pgpio._tcp` (`sudo apt install avahi-utils`): if
+     the board is missing here too, it is the network (other subnet/VLAN,
+     Wi-Fi access point filtering multicast); if it is listed, Companion's
+     mDNS is the suspect.
+   - `ip -br addr`: Ethernet and Wi-Fi both up? Companion's
+     `@julusian/bonjour-service` is created without choosing an interface.
+   - How many boards are on the network: with the old firmware they all
+     advertise `pgpio-plus`, which conflicts in mDNS.
+   - Companion version on the Pi, and whether a Companion on a Mac in the
+     same network finds the board.
+2. **Firmware with unique mDNS names.** When it arrives, check that the
+   dropdown shows `PGPIO+ <ID> (ip:port)`, that two boards appear as two
+   entries, and verify with `dns-sd -B _pgpio._tcp` / `dns-sd -L "PGPIO+
+<ID>" _pgpio._tcp` (macOS) or `avahi-browse -rt _pgpio._tcp` (Linux).
+   No module change is needed.
+3. Test _Tally from value_ and _GPI select_ with a real ATEM. The ATEM
    module source shows `aux{N}_input_id` (1-based) and an expression-capable
    source field; still to check: whether the Aux field of _Aux/Output: Set
    source_ can be switched to expression mode, and the ATEM source IDs in
    the source list (Color Bars `1000` is not confirmed from the code).
-2. Check the mapping rows in a real Companion: row visibility with the
+4. Check the mapping rows in a real Companion: row visibility with the
    count and BMD mode, typing a custom value, and the upgrade of a 1.4.1
    text mapping.
-3. A lifecycle smoke test (`init` / `configUpdated` / `destroy` with a fake
+5. A lifecycle smoke test (`init` / `configUpdated` / `destroy` with a fake
    `InstanceContext`) would complement the current unit tests.
