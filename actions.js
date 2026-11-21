@@ -122,7 +122,9 @@ export function getActions(self) {
 				const restState = activeState ? 0 : 1
 				// a new pulse on the same pin restarts the timer instead of being cut short by the old one
 				clearTimeout(self.pulseTimers.get(pin))
-				self.device.setGpo(pin, activeState)
+				self.pulseTimers.delete(pin)
+				// if the pulse could not start (not connected), do not send the delayed rest state either
+				if (!self.device.setGpo(pin, activeState)) return
 				self.pulseTimers.set(
 					pin,
 					setTimeout(() => {

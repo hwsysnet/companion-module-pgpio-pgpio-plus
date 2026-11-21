@@ -99,3 +99,17 @@ test('no host and no discovered device: BadConfig, no connection attempt', () =>
 	assert.equal(statuses.at(-1)[0], 'connecting')
 	assert.equal(started, true)
 })
+
+test('configUpdated clears device_status, even when the new config has no address', async () => {
+	const inst = fakeInstance()
+	const checked = []
+	inst.checkFeedbacks = (...ids) => checked.push(...ids)
+	inst.device.stop = () => {}
+	inst.config = { host: '10.0.0.5', port: 32032 }
+	inst.device.emit('connect')
+	assert.deepEqual(inst.vars.at(-1), { device_status: true })
+
+	await inst.configUpdated({ host: '', port: 32032 })
+	assert.ok(inst.vars.some((v) => v.device_status === false))
+	assert.ok(checked.includes('device_status'))
+})

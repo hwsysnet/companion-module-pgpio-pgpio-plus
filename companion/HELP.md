@@ -103,8 +103,10 @@ To light the tally lamp of the source currently on an ATEM Aux output:
    (check the exact name in the Variables list of your ATEM connection).
 3. Add the action **Tally from value** with Value `$(atem:aux1_input_id)`
    and Mapping **From connection settings**.
-4. Add a second event, **On startup**, to the same trigger so the tally is
-   correct as soon as Companion starts.
+4. Add two more events to the same trigger: **On startup**, so the tally is
+   correct as soon as Companion starts, and **On variable change** on
+   `pgpio:device_status`, so it is restored when the board reconnects (an
+   Aux change made while the board was offline is otherwise missed).
 
 The mapping can then be changed in the connection settings without touching
 the trigger. The trigger itself is needed because a connection's settings

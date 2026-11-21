@@ -40,8 +40,15 @@ export default class PgpioPlusInstance extends InstanceBase {
 		const gpiSelectWasEnabled = !!this.config.gpi_select_enabled
 		this.config = config
 		this._applyOptionalFeatures(gpiSelectWasEnabled)
+		// stop() does not emit 'disconnect', so clear the connection state here
 		this.device.stop()
+		this._setDeviceStatus(false)
 		this._startDevice()
+	}
+
+	_setDeviceStatus(connected) {
+		this.setVariableValues({ device_status: toBool(connected) })
+		this.checkFeedbacks('device_status')
 	}
 
 	getConfigFields() {
@@ -99,20 +106,17 @@ export default class PgpioPlusInstance extends InstanceBase {
 	_bindDeviceEvents() {
 		this.device.on('connect', () => {
 			this.updateStatus(InstanceStatus.Ok)
-			this.setVariableValues({ device_status: toBool(true) })
-			this.checkFeedbacks('device_status')
+			this._setDeviceStatus(true)
 		})
 
 		this.device.on('disconnect', () => {
 			this.updateStatus(InstanceStatus.ConnectionFailure, 'Disconnected, reconnecting...')
-			this.setVariableValues({ device_status: toBool(false) })
-			this.checkFeedbacks('device_status')
+			this._setDeviceStatus(false)
 		})
 
 		this.device.on('error', (err) => {
 			this.updateStatus(InstanceStatus.ConnectionFailure, err.message)
-			this.setVariableValues({ device_status: toBool(false) })
-			this.checkFeedbacks('device_status')
+			this._setDeviceStatus(false)
 		})
 
 		this.device.on('state', (gpi, gpo) => {

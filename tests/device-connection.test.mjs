@@ -45,7 +45,10 @@ test('hello -> connect, then requests and applies the full state', async (t) => 
 	await connected
 	await state
 	assert.ok(dev.isConnected())
+	assert.ok(dev.ready)
 	assert.ok(received.some((m) => m.type === 'get_state'))
+	dev.stop()
+	assert.equal(dev.ready, false)
 })
 
 test('gpi_change updates the cache and emits only on a real change', async (t) => {

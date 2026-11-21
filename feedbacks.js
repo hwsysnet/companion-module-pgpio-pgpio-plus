@@ -22,7 +22,7 @@ export function getFeedbacks(self) {
 				color: combineRgb(0, 0, 0),
 			},
 			options: [],
-			callback: () => self.device.isConnected(),
+			callback: () => self.device.ready,
 		},
 
 		gpi_state: {

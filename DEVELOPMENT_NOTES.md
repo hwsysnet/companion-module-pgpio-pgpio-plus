@@ -172,7 +172,19 @@ defined at all** (`_applyOptionalFeatures` in `main.js`, run on `init` and
 - With no discovered device and no manual IP address, the module reports
   _Bad configuration_ instead of staying in _Connecting_ forever.
 - A new Pulse on a pin that is still pulsing restarts the timer; pending
-  pulse timers are cleared on `destroy`.
+  pulse timers are cleared on `destroy`. If the pulse cannot start because
+  the board is offline, no delayed rest-state command is scheduled, so a
+  reconnect during the pulse time cannot switch the output unexpectedly.
+- "Connected" means the board has sent `hello` (`DeviceConnection.ready`).
+  The Companion status, the `device_status` variable and the connection
+  feedback all use this, so they always agree.
+- `DeviceConnection.stop()` removes its socket listeners and therefore does
+  not emit `disconnect`. `configUpdated` clears `device_status` itself,
+  otherwise the old "connected" state would remain, permanently so if the
+  new configuration has no address.
+- Commands sent while the board is offline are dropped, not queued. Tally
+  triggers should also fire on `device_status` changes (see HELP.md) so the
+  tally is restored after a reconnect.
 
 ## Testing
 

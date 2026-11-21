@@ -12,7 +12,11 @@ function fakeSelf(config = {}) {
 		logs: [],
 		device: {
 			gpo: Array(32).fill(0),
-			setGpo: (pin, state) => self.single.push({ pin, state }),
+			setGpo: (pin, state) => {
+				if (self.disconnected) return false
+				self.single.push({ pin, state })
+				return true
+			},
 			setGpoBulk: (p) => self.sent.push(p),
 		},
 		momentaryPins: new Set(),
@@ -145,5 +149,16 @@ test('pulse: a second pulse on the same pin restarts the timer', async (t) => {
 	])
 	t.mock.timers.tick(200)
 	assert.deepEqual(self.single.at(-1), { pin: 2, state: 0 })
+	assert.equal(self.pulseTimers.size, 0)
+})
+
+test('pulse: not connected -> no delayed rest-state command later', async (t) => {
+	t.mock.timers.enable({ apis: ['setTimeout'] })
+	const self = fakeSelf({})
+	self.disconnected = true
+	await getActions(self).pulse_gpo.callback({ options: { pin: 1, duration: 500, active_state: 0 } })
+	self.disconnected = false // connection comes back during the would-be pulse
+	t.mock.timers.tick(1000)
+	assert.deepEqual(self.single, [])
 	assert.equal(self.pulseTimers.size, 0)
 })

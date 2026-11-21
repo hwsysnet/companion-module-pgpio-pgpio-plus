@@ -29,6 +29,8 @@ export class DeviceConnection extends EventEmitter {
 		this.lastMessageAt = 0
 		this.watchdogTimer = null
 		this.destroyed = false
+		// true once the device has sent 'hello' on the current connection
+		this.ready = false
 
 		this.gpi = new Array(GPI_COUNT).fill(0)
 		this.gpo = new Array(GPO_COUNT).fill(0)
@@ -53,6 +55,7 @@ export class DeviceConnection extends EventEmitter {
 
 	stop() {
 		this.destroyed = true
+		this.ready = false
 		this._clearTimers()
 		if (this.ws) {
 			const ws = this.ws
@@ -63,7 +66,7 @@ export class DeviceConnection extends EventEmitter {
 			ws.on('error', () => {})
 			try {
 				ws.terminate()
-			} catch (e) {
+			} catch {
 				// ignore
 			}
 		}
@@ -102,6 +105,7 @@ export class DeviceConnection extends EventEmitter {
 		})
 
 		ws.on('close', () => {
+			this.ready = false
 			this.log('debug', 'WebSocket connection closed')
 			this._clearTimers()
 			this.emit('disconnect')
@@ -145,7 +149,7 @@ export class DeviceConnection extends EventEmitter {
 				if (this.ws) {
 					try {
 						this.ws.terminate()
-					} catch (e) {
+					} catch {
 						// ignore
 					}
 				}
@@ -192,6 +196,7 @@ export class DeviceConnection extends EventEmitter {
 						`Device reports ${msg.gpi_count} GPI / ${msg.gpo_count} GPO; this module expects ${GPI_COUNT} / ${GPO_COUNT}`,
 					)
 				}
+				this.ready = true
 				this.emit('connect', msg)
 				this.requestState()
 				break

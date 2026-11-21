@@ -40,7 +40,7 @@ wss.on('connection', (ws) => {
 		let msg
 		try {
 			msg = JSON.parse(data.toString())
-		} catch (e) {
+		} catch {
 			console.warn('Invalid JSON from module:', data.toString())
 			return
 		}
