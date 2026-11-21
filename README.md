@@ -8,6 +8,7 @@ outputs.
 - User documentation (actions, feedbacks, variables, presets, examples):
   [companion/HELP.md](companion/HELP.md)
 - WebSocket protocol the firmware implements: [PROTOCOL.md](PROTOCOL.md)
+- Version history: [CHANGELOG.md](CHANGELOG.md)
 - Design decisions, release process and open items:
   [DEVELOPMENT_NOTES.md](DEVELOPMENT_NOTES.md)
 
@@ -23,7 +24,13 @@ npm run mock-device    # simulated PGPIO+ board, no hardware needed
 npm run package        # build the installable .tgz package
 ```
 
-### Running the module in Companion
+### Installing a build
+
+`npm run package` writes `pgpio-pgpio-plus-<version>.tgz` to the project
+root. In Companion, open the _Modules_ tab, choose _Import module package_
+and select the file. Existing connections keep their settings.
+
+### Running the module in Companion as a developer module
 
 1. In the Companion Launcher, open the **cog icon** → _Advanced Settings_.
 2. Under **Developer**, select the **parent folder** of this module's folder,

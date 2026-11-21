@@ -14,6 +14,23 @@ why things are the way they are.
 - `npm test` and `npm run check` pass.
 - Not yet tested against a real ATEM. The tally and GPI select features are
   covered by unit tests only (see [Open items](#open-items)).
+- Version history: [CHANGELOG.md](CHANGELOG.md). 1.0.0 was the first
+  release; versions between 1.0.0 and 1.4.1 were never published.
+
+### Release state (2026-11-21)
+
+| Step                                                                                  | State   |
+| ------------------------------------------------------------------------------------- | ------- |
+| `v1.4.1` tagged and pushed to `github.com/hwsysnet/companion-module-pgpio-pgpio-plus` | Done    |
+| Installable package `pgpio-pgpio-plus-1.4.1.tgz` built for in-house devices           | Done    |
+| Repository request on the Developer Portal                                            | To do   |
+| Push code and `v1.4.1` tag to the new Bitfocus repository                             | Waiting |
+| Submit `v1.4.1` on the portal (_My Connections_ → _Submit Version_)                   | Waiting |
+
+Until the Bitfocus repository exists, the repository URLs in `package.json`,
+`companion/manifest.json` and the PROTOCOL.md link in HELP.md point to a
+page that does not exist yet. This is intentional: they are correct for the
+published module.
 
 ## Releasing
 
@@ -37,6 +54,45 @@ module".
    volunteers; feedback arrives on the portal.
 3. Before tagging: `npm test`, `npm run check`, `npm run format`, and
    `npm run package` to confirm the package builds.
+
+### Repository request form
+
+Answers prepared for the _Create Module Repository_ form, kept here in case
+the request has to be resubmitted or the module team asks follow-up
+questions.
+
+- **Type:** Companion Connection. **TypeScript:** no (the module is
+  JavaScript).
+- **Module name:** `pgpio-pgpio-plus`
+- **What will the module control?**
+  > PGPIO+, an ESP32-based GPIO tally board with 32 GPI inputs (dry contact
+  > closures) and 32 GPO outputs (relays for tally lamps). The module
+  > connects as a WebSocket client using a JSON protocol, with Bonjour/mDNS
+  > discovery (\_pgpio.\_tcp) and manual IP fallback. It provides GPO
+  > actions (set/toggle/momentary/pulse), GPI/GPO feedbacks and variables,
+  > and optional tally-from-variable (e.g. ATEM Aux) and GPI-select
+  > features. Protocol:
+  > https://github.com/hwsysnet/companion-module-pgpio-pgpio-plus/blob/main/PROTOCOL.md
+- **Why should this be a new module?**
+  > PGPIO+ is a new device with its own WebSocket/JSON protocol. No existing
+  > Companion module supports it, and generic GPIO or tally modules use
+  > different protocols, so there is nothing that could be extended.
+- **Existing code:** https://github.com/hwsysnet/companion-module-pgpio-pgpio-plus
+- **companion-module-requests issue:** none.
+
+Expect a question on where the hardware can be obtained; have a short answer
+ready (who uses the board and whether it is available to others).
+
+### Installing a build on in-house devices
+
+`npm run package` writes `pgpio-pgpio-plus-<version>.tgz` to the project
+root (ignored by git). In Companion: _Modules_ tab → _Import module
+package_ → select the file. After the import, edit each PGPIO+ connection
+and select the new version if Companion does not switch to it
+automatically. Existing connection settings are kept; options added since
+1.0.0 default to off.
+
+### Package manager
 
 The project uses npm (`package-lock.json`). The Bitfocus template uses yarn,
 but the docs do not require it. If the review asks for yarn, switch with
