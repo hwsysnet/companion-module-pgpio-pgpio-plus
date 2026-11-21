@@ -19,13 +19,13 @@ why things are the way they are.
 
 ### Release state (2026-11-21)
 
-| Step                                                                                  | State   |
-| ------------------------------------------------------------------------------------- | ------- |
-| `v1.4.1` tagged and pushed to `github.com/hwsysnet/companion-module-pgpio-pgpio-plus` | Done    |
-| Installable package `pgpio-pgpio-plus-1.4.1.tgz` built for in-house devices           | Done    |
-| Repository request on the Developer Portal                                            | To do   |
-| Push code and `v1.4.1` tag to the new Bitfocus repository                             | Waiting |
-| Submit `v1.4.1` on the portal (_My Connections_ → _Submit Version_)                   | Waiting |
+| Step                                                                                  | State                                                                        |
+| ------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| `v1.4.1` tagged and pushed to `github.com/hwsysnet/companion-module-pgpio-pgpio-plus` | Done                                                                         |
+| Installable package `pgpio-pgpio-plus-1.4.1.tgz` built for in-house devices           | Done                                                                         |
+| Repository request on the Developer Portal                                            | Submitted 2026-11-21, awaiting review (questions arrive on the request page) |
+| Push code and `v1.4.1` tag to the new Bitfocus repository                             | Waiting                                                                      |
+| Submit `v1.4.1` on the portal (_My Connections_ → _Submit Version_)                   | Waiting                                                                      |
 
 Until the Bitfocus repository exists, the repository URLs in `package.json`,
 `companion/manifest.json` and the PROTOCOL.md link in HELP.md point to a
