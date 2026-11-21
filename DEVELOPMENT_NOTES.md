@@ -264,6 +264,17 @@ defined at all** (`_applyOptionalFeatures` in `main.js`, run on `init` and
 `configUpdated`). Existing triggers using the action stay inactive as
 "unknown action" and work again when the feature is switched back on.
 
+## Discovery label and mDNS
+
+Companion, not the module, browses for `_pgpio._tcp` (from `bonjourQueries`
+in the manifest) and fills the **Auto-discover device** dropdown. Each entry
+is labelled `${svc.name} (${address})` (webui
+`BonjourDeviceInputField.tsx`), so the only way to show a per-board ID is the
+mDNS instance name advertised by the firmware; PROTOCOL.md specifies
+`PGPIO+ <last 3 MAC bytes>`. The earlier example used a fixed `pgpio-plus`
+host name, which makes two boards conflict in mDNS. Companion uses
+`@julusian/bonjour-service` without choosing an interface.
+
 ## Mapping rows in the connection settings
 
 Companion config fields cannot form a table, so each mapping (tally:

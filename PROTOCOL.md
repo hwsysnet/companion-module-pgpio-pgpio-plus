@@ -49,18 +49,39 @@ To be discoverable, the firmware advertises an mDNS service with:
 - **Service type:** `_pgpio._tcp` (full name `_pgpio._tcp.local.`)
 - **Port:** the port the WebSocket server actually listens on (default
   `32032`)
-- **TXT records:** none required today. If more PGPIO+ models appear, a
-  `model` TXT field is the recommended way to tell them apart.
+- **Instance name:** `PGPIO+ <ID>`, where `<ID>` is unique per board. The
+  recommended ID is the last three bytes of the board's MAC address in
+  upper-case hex, e.g. `PGPIO+ A1B2C3`. Companion lists discovered devices
+  as `<instance name> (<ip>:<port>)`, so this is what users see in the
+  **Auto-discover device** dropdown; the ID is what tells two boards apart.
+  Printing the same ID on the board's label makes it easy to match.
+- **Host name:** `pgpio-plus-<id>` (lower case), e.g. `pgpio-plus-a1b2c3`.
+  Two boards must never advertise the same host or instance name: mDNS
+  treats that as a conflict, and discovery of either board becomes
+  unreliable.
+- **TXT records:** `id=<ID>` (the same ID) is recommended. If more PGPIO+
+  models appear, a `model` TXT field is the recommended way to tell them
+  apart.
 
 Arduino / ESP32 (`ESPmDNS`):
 
 ```cpp
+#include <WiFi.h>
 #include <ESPmDNS.h>
 
 void setup() {
-  // ... after WiFi.begin() has connected:
-  if (MDNS.begin("pgpio-plus")) {           // any hostname
-    MDNS.addService("pgpio", "tcp", 32032);  // "pgpio", not "_pgpio": the library adds the underscore
+  // ... after WiFi.begin() has connected (with Ethernet, use ETH.macAddress):
+  uint8_t mac[6];
+  WiFi.macAddress(mac);
+  char id[7];
+  snprintf(id, sizeof id, "%02X%02X%02X", mac[3], mac[4], mac[5]);
+
+  String host = String("pgpio-plus-") + id;
+  host.toLowerCase();
+  if (MDNS.begin(host.c_str())) {
+    MDNS.setInstanceName(String("PGPIO+ ") + id);  // shown in Companion
+    MDNS.addService("pgpio", "tcp", 32032);        // "pgpio", not "_pgpio": the library adds the underscore
+    MDNS.addServiceTxt("pgpio", "tcp", "id", id);
   }
 }
 ```
@@ -68,9 +89,18 @@ void setup() {
 ESP-IDF (`mdns` component):
 
 ```c
+uint8_t mac[6];
+esp_read_mac(mac, ESP_MAC_WIFI_STA);
+char id[7], host[32], instance[32];
+snprintf(id, sizeof id, "%02X%02X%02X", mac[3], mac[4], mac[5]);
+snprintf(host, sizeof host, "pgpio-plus-%02x%02x%02x", mac[3], mac[4], mac[5]);
+snprintf(instance, sizeof instance, "PGPIO+ %s", id);
+
 mdns_init();
-mdns_hostname_set("pgpio-plus");
-mdns_service_add(NULL, "_pgpio", "_tcp", 32032, NULL, 0);
+mdns_hostname_set(host);
+mdns_instance_name_set(instance);
+mdns_txt_item_t txt[] = { { "id", id } };
+mdns_service_add(instance, "_pgpio", "_tcp", 32032, txt, 1);
 ```
 
 ## Connection lifecycle
