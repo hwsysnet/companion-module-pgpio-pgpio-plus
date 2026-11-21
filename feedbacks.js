@@ -10,7 +10,7 @@ function pinChoices(count, prefix) {
 }
 
 // "ON" here means closed contact / energized relay (state 1 / true) — see
-// PROTOCOL.md "Logikai polaritás" (logical polarity). Open contact / de-energized relay is "OFF".
+// PROTOCOL.md "Logical polarity". Open contact / de-energized relay is "OFF".
 export function getFeedbacks(self) {
 	return {
 		device_status: {

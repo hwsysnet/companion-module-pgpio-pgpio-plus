@@ -1,185 +1,196 @@
-# Fejlesztési jegyzetek — PGPIO+ Companion modul
+# Development notes
 
-Ez a dokumentum a fejlesztés közbeni döntéseket, a jelenlegi állapotot és a
-nyitott feladatokat rögzíti, hogy egy későbbi munkamenet (akár másik
-fejlesztő, akár egy másik Claude Code session) gyorsan vissza tudjon
-kapcsolódni anélkül, hogy újra végig kellene gondolnia ugyanazokat a
-döntéseket. A modul **felhasználói** dokumentációja a [README.md](README.md)
-(fejlesztői gyorsindítás, fájlstruktúra), a
-[companion/HELP.md](companion/HELP.md) (Companion admin felületen megjelenő
-súgó) és a [PROTOCOL.md](PROTOCOL.md) (WS protokoll a firmware-nek) —
-ez a fájl ezeket **nem ismétli meg**, csak a hátteret/indoklást adja hozzá.
+Background for maintainers: design decisions, known limitations and open
+items. User documentation lives in [companion/HELP.md](companion/HELP.md),
+the firmware contract in [PROTOCOL.md](PROTOCOL.md), and the developer quick
+start in [README.md](README.md). This file does not repeat them; it explains
+why things are the way they are.
 
-## Állapot (2026-09-08)
+## Status (1.4.1)
 
-- A modul funkcionálisan kész: kapcsolatkezelés (`device-connection.js`),
-  akciók (`actions.js`), feedback-ek (`feedbacks.js`), változók
-  (`variables.js`), presetek (`presets.js`) megvannak, `npm run check`
-  hibamentes.
-- **Publikálás (2026-10-05):** a modul ID `pgpio-pgpio-plus`-ra változott
-  (Bitfocus `gyártó-termék` konvenció, manufacturer: `PGPIO`), a HELP.md,
-  a README és a konfigurációs mezők angolra fordítva, LICENSE (MIT)
-  hozzáadva. Git repó: https://github.com/hwsysnet/companion-module-pgpio-pgpio-plus
-  (`v1.0.0` tag). Hátralévő lépés: a Bitfocus Slack `#module-development`
-  csatornáján repót kérni a `bitfocus` szervezetben, majd a
-  https://developer.bitfocus.io/ portálon beküldeni a verziót.
-- A README által ajánlott `smoke-test.mjs` (hamis `InstanceContext`-tel
-  futtatott `init`/`configUpdated`/`destroy` életciklus-teszt, lásd
-  README "`@companion-module/base` v2 API" szakasz) **még nincs
-  megírva**. Eddig helyette ad-hoc `node -e "..."` szkriptekkel
-  ellenőriztük az `actions.js`/`presets.js` viselkedését — ezeket érdemes
-  lenne egy tényleges `smoke-test.mjs`-be konszolidálni.
+- Feature complete: connection handling, GPO actions (set, toggle,
+  momentary, pulse, all), GPI/GPO feedbacks and variables, presets, and the
+  two optional ATEM-oriented features (tally from value, GPI select).
+- `npm test` and `npm run check` pass.
+- Not yet tested against a real ATEM. The tally and GPI select features are
+  covered by unit tests only (see [Open items](#open-items)).
 
-## GPO vezérlés — a "Set GPO" akció módjai és miért így alakultak
+## Releasing
 
-A `set_gpo` akció (`actions.js`) módjai: **Toggle**, **On**, **Off**,
-**Momentary**. A Momentary mód a "csengőgomb" jellegű, csak nyomvatartás
-alatt aktív kimenet igényéből született — ennek a kialakítása több
-iteráción ment át ebben a munkamenetben, érdemes ismerni a köztes
-próbálkozásokat is, mert a trigger-alapú vezérlés kapcsán ugyanezek a
-korlátok fognak újra előjönni.
+The module is published through the Bitfocus Developer Portal
+(<https://developer.bitfocus.io/>); see the Companion docs, "Releasing your
+module".
 
-### A Companion-architektúra alapkorlátja (ez motivált mindent)
+1. **Repository request (first release only).** Requested on the portal's
+   _Create Module Repository_ page; requests posted on Slack are no longer
+   accepted. Module name: `pgpio-pgpio-plus`, which gives
+   `github.com/bitfocus/companion-module-pgpio-pgpio-plus`. Any discussion
+   about the request (naming, questions from the module team) happens on
+   the request page. Once approved, GitHub sends a maintainer invitation.
+   The new repository starts empty, so the code has to be pushed to it.
+   `package.json` and `companion/manifest.json` already point to the
+   Bitfocus repository URL.
+2. **Each version.** Bump `version` in `package.json` (the build copies it
+   into the manifest, which stays at `0.0.0`), commit, create a `v`-prefixed
+   tag (e.g. `v1.4.1`) and push it. Then, on the portal: _My Connections_ →
+   the module → _Submit Version_ → pick the tag. Versions are reviewed by
+   volunteers; feedback arrives on the portal.
+3. Before tagging: `npm test`, `npm run check`, `npm run format`, and
+   `npm run package` to confirm the package builds.
 
-Egy Companion modul **action callback-je nem kapja meg**, hogy egy adott
-hívás gombnyomásra (`down`) vagy -elengedésre (`up`) történt-e —
-ellenőriztük a `@companion-module/base` SDK típusdefinícióit
-(`CompanionActionEvent`, lásd
-`node_modules/@companion-module/base/dist/module-api/action.d.ts`): nincs
-benne fázis-jelző, és nincs semmilyen "auto-release"/"run on release"
-mechanizmus sem, amit a modul kérhetne. A `down`/`up` felosztás **csak a
-gomb konfigurációjának szintjén** létezik (lásd
-`CompanionButtonStepActions` a
-`node_modules/@companion-module/base/dist/module-api/preset/definition.d.ts`-ben):
-egy gombnak van külön **Press (down)** és **Release (up)**
-akciólistája, és Companion ezeket a fizikai nyomás/elengedés pillanatában
-futtatja le — de a modul callback-je szemszögéből a két hívás
-megkülönböztethetetlen, ha nem mi magunk tartunk nyilván állapotot.
+The project uses npm (`package-lock.json`). The Bitfocus template uses yarn,
+but the docs do not require it. If the review asks for yarn, switch with
+`corepack` and commit `yarn.lock` instead.
 
-**Ebből következik:** valódi "amíg nyomva tartod, addig aktív" viselkedés
-**kizárólag** úgy érhető el, hogy ugyanaz (vagy egy erre tervezett) akció
-**mindkét** listában (Press és Release) szerepel, és a modul saját maga
-tartja nyilván, hogy éppen "fel van-e fegyverezve" (arm/disarm páros
-hívás). Ha az akció csak az egyik listában van, nincs mód a modul oldaláról
-kitalálni, mikor kellene visszakapcsolnia.
+## Companion version compatibility
 
-### Kipróbált és elvetett megoldás: fix idejű impulzus módban "Momentary"
+Companion decides whether it can load a module from the manifest's
+`runtime.type` and `runtime.apiVersion` (the installed
+`@companion-module/base` version). Per the base package's README:
+**Companion 5.0 accepts base 1.0–2.1, Companion 5.1 accepts 1.0–2.2.**
+Companion 5.1 ships `node18`, `node22` and `node26` runtimes, so `node26` is
+fine.
 
-Egy köztes iterációban a Momentary módot **duration-alapú impulzusra**
-cseréltük (a meglévő "Pulse GPO" logikájával megegyezően: bekapcsol, majd
-`momentary_duration` ms után automatikusan visszakapcsol) — ennek előnye,
-hogy **csak Press-listás** akcióként működik, Release nélkül. A felhasználó
-ezt **kifejezetten elvetette**, mert megbízhatatlanabbnak találta (nem
-igazodik a tényleges nyomvatartás hosszához) — **vissza lett állítva** a
-Press+Release arm/disarm megoldásra. **Ha valaki később újra ezt az utat
-akarná bejárni, tudja: ezt már kipróbáltuk, és a felhasználó explicit
-elvetette — ne ismételjük meg kérdés nélkül.**
+That is why the base dependency is pinned to **`~2.1.3`** rather than
+`^2.1.3`: a caret range would pull 2.2.x on a fresh install, which Companion
+5.0 refuses to load. Move to 2.2 only when a 2.2 feature is needed and
+Companion 5.0 support can be dropped.
 
-### A jelenleg élő megoldás: Press+Release arm/disarm
+## Set GPO: why Momentary works the way it does
 
-- `main.js`: `this.momentaryPins = new Set()` — pinenként tárolja, hogy a
-  Momentary akció épp "fel van-e fegyverezve" (bekapcsolva tartva).
-- `actions.js` `set_gpo` callback, `mode === 'momentary'` ág: ha a pin
-  nincs a Setben, felveszi és bekapcsolja (ez a "press" hívás); ha már
-  benne van, törli és kikapcsolja (ez a "release" hívás). Van egy
-  `self.log('debug', ...)` sor is ebben az ágban kifejezetten diagnosztikai
-  célból (`momentary pin=... wasArmed=... -> ON/OFF`) — ezt **szándékosan
-  nem távolítottuk el**, mert a hibakereséshez (lásd lent) hasznos volt és
-  hasznos is marad, ha valaha megint "beragad" a viselkedés.
-- `presets.js`: a `GPO n (Momentary)` preset (`gpo_momentary_<n>` id-k, a
-  `gpo_momentary` struktúra-szekcióban) ugyanazt a `set_gpo`
-  (`mode: 'momentary'`) akciót teszi be **mindkét** (`down` és `up`)
-  listába egy lépésben — ez a **javasolt, megbízható** módja a Momentary
-  gomb létrehozásának, **nem** a kézi összeállítás.
+### The constraint
 
-### Hibakeresési tapasztalat: miért "toggle-szerű" / "beragadt" a viselkedés
+A Companion action callback is **not told whether it runs on button press
+or release**. `CompanionActionEvent` (see
+`node_modules/@companion-module/base/dist/module-api/action.d.ts`) has no
+phase field, and there is no "auto-release" mechanism a module can request.
+Press and release only exist at the button level: a button has separate
+**Press (down)** and **Release (up)** action lists
+(`CompanionButtonStepActions` in `.../preset/definition.d.ts`).
 
-A felhasználó két különböző tünetet is tapasztaltút közben kézzel épített
-gombbal (nem a preseten keresztül):
+### The current solution: arm/disarm
 
-1. **"Ugyanazt csinálja, mint a toggle"** — ennek oka az volt, hogy az
-   akció csak a Press listában szerepelt, a Release listában nem (vagy
-   csak részben lett odarakva). Mivel a callback csak egyszer (nyomásra)
-   fut le, az arm/disarm páros logika **minden egyes nyomásra felváltva**
-   be- majd kikapcsol — ez kívülről pontosan úgy néz ki, mint a Toggle mód,
-   noha a kód szintjén más útvonalon megy végig.
-2. **"Beragad az állapot"** — ez akkor jelentkezett, amikor a Release
-   listában is szerepelt az akció, de feltehetően **duplikált
-   akciósorokkal** (pl. korábbi kézi próbálkozásból ott maradt extra
-   sorok) — ha egy adott listában **kétszer** szerepel ugyanaz az akció,
-   egyetlen fizikai nyomás/elengedés két callback-hívást vált ki, ami
-   megbontja az arm/disarm páros számolást, és kiszámíthatatlan (esetenként
-   "beragadt") végállapotot eredményez.
+The same `Set GPO` action in Momentary mode goes into **both** lists. The
+module keeps a set of armed pins (`momentaryPins` in `main.js`): the first
+call arms the pin and switches it on, the matching second call disarms it
+and switches it off. The `GPO n (Momentary)` presets build exactly this, and
+they are the recommended way to create such a button.
 
-**Végül a kész preset használatával** (nem kézi gombbal) mindkét probléma
-megoldódott — ez megerősíti, hogy a kód logikája helyes, a hibák a kézi
-gombépítés során becsúszott hiányos/duplikált akció-konfigurációból
-adódtak. **Tanulság további fejlesztéshez:** ha valaki manuálisan épít
-Momentary gombot (nem presettel), nyomatékosan ellenőrizni kell, hogy a
-"Set GPO" (Momentary) akció **pontosan egyszer** szerepel a Press és
-**pontosan egyszer** a Release listában — sem több, sem kevesebb.
+The `self.log('debug', …)` line in the Momentary branch is kept on purpose:
+at Companion's debug log level it shows every arm/disarm pair, which is the
+quickest way to diagnose a misconfigured button.
 
-## Nyitott kérdés: Momentary viselkedés Trigger-ből (nem gombról)
+### Rejected alternative: fixed-length pulse
 
-A felhasználó felvetette, hogy **Companion Triggerből** (Triggers/Events
-fül, nem gomb) szeretné indítani a "csak amíg aktív, addig ON" logikát.
-Ez **más architekturális helyzet**, mint a gomb Press/Release, mert egy
-Trigger nem feltétlenül ad "vége" jelzést:
+Momentary was briefly implemented as a fixed-duration pulse (on, then off
+after a set time), which only needs the Press list. It was dropped because
+the output no longer follows how long the button is actually held. The
+**Pulse GPO** action still exists for cases where a fixed length is what is
+wanted.
 
-- **Ha a triggert kiváltó forrás (pl. MIDI/OSC/HTTP) csak egyszeri,
-  pillanatnyi eseményt küld** (nincs pl. MIDI note-off vagy második
-  HTTP hívás a "vége" jelzésére), akkor **nincs mód** a modul oldaláról
-  kitalálni, mikor kell visszakapcsolni — ez nem a modul korlátja, hanem
-  az adatforrásé. Ilyenkor az egyetlen technikailag helyes megoldás a
-  **már meglévő "Pulse GPO" akció** (fix, konfigurálható időtartam,
-  `actions.js` `pulse_gpo`), **nem** a Momentary mód — ehhez **nem kell
-  új kódot írni**, a Pulse GPO már megvan.
-- **Ha viszont VAN egy tényleges true/false állapot/változó**, amiből a
-  trigger jön (pl. egy Companion belső változó vagy egy másik modul
-  feedback-je, ami igaz amíg "aktív", hamis amikor "nem aktív"), akkor
-  **nem kell ismerni előre az időtartamot** — csak **két külön Triggert**
-  kell felvenni a Companion Triggers/Events fülön:
-  - Trigger A: feltétel = a változó **igaz** → Action: `Set GPO`, mode:
-    **On**.
-  - Trigger B: feltétel = ugyanaz a változó **hamis** → Action: `Set GPO`,
-    mode: **Off**.
+### Known pitfalls with hand-built buttons
 
-  Ez pontosan ugyanaz a minta, mint a gomb Press/Release-e, csak a két
-  "oldalt" nem egy gomb két akciólistája, hanem két külön Trigger adja.
-  **Ehhez sem kell modul-kód változtatás** — a `Set GPO` akció On/Off
-  módja már megvan, ez tisztán Companion-oldali Trigger-konfiguráció.
+Both symptoms below were seen with hand-built buttons and disappeared with
+the preset. The code is correct; the button configuration was not.
 
-**Ez a beszélgetés végén még nyitva maradt**: nem tisztázódott, pontosan
-melyik változó/feedback adja a felhasználó valós true/false forrását, így
-a konkrét Trigger-feltétel (Event type, összehasonlítás) beállítása még
-hátravan — ezt kell elsőként tisztázni a következő munkamenet elején, ha a
-téma folytatódik.
+- **"It behaves like Toggle":** the action was only in the Press list. Each
+  press then alternates between arm (on) and disarm (off).
+- **"The state gets stuck":** the action was in a list more than once
+  (leftover rows from earlier edits). One press then triggers two calls and
+  the arm/disarm pairing breaks.
 
-## Tesztelési módszerek, amiket eddig használtunk
+A hand-built Momentary button needs the action **exactly once** in Press and
+**exactly once** in Release.
 
-- `npm run check` (`companion-module-check`) — manifest/struktúra
-  validáció, minden módosítás után érdemes lefuttatni.
-- Ad-hoc Node szkriptek (`node -e "import('./actions.js')..."`) egy
-  hamis `self` objektummal (`{ device: { gpo: [...], setGpo() {...} },
-  momentaryPins: new Set(), log() {...} }`) — ezekkel közvetlenül
-  tesztelhető egy akció `callback`-je vagy a `getPresets()` kimenete
-  Companion nélkül. Gyors, de **nem helyettesíti** a valódi Companion
-  GUI-ban történő tesztelést (lásd a fenti "toggle-szerű"/"beragadt"
-  esetet, amit csak valódi gombbal lehetett reprodukálni és
-  diagnosztizálni).
-- `npm run mock-device` — szimulált ESP32 a device-connection.js
-  end-to-end teszteléséhez, valódi hardver nélkül.
-- A `set_gpo` Momentary ágában lévő `self.log('debug', ...)` sor — ezt
-  kifejezetten azért hagytuk bent, hogy Companion Debug log szintjén
-  látszódjon minden arm/disarm hívás párja; hasznos, ha megint
-  furcsaság jelentkezne.
+### Momentary behaviour from a Trigger
 
-## Rövid táv: mit érdemes legközelebb csinálni
+A Trigger has no "release", so the right approach depends on the source:
 
-1. Tisztázni a Trigger-alapú true/false forrást (lásd fent), és ha kell,
-   segíteni a konkrét Trigger-konfigurációban (ez Companion-oldali
-   beállítás, nem kód).
-2. `git init` + kezdeti commit, hogy a jövőbeli változtatások
-   követhetők legyenek.
-3. `smoke-test.mjs` megírása a README-ben leírt módon (hamis
-   `InstanceContext` + `init`/`configUpdated`/`destroy` életciklus).
+- **One-shot event** (e.g. an OSC/HTTP message with no matching "end"
+  message): the end cannot be known, so use **Pulse GPO** with a fixed
+  duration.
+- **A real true/false state** (a variable or feedback that is true while
+  "active"): use two Triggers, one for _becomes true_ → `Set GPO: On`, one
+  for _becomes false_ → `Set GPO: Off`. No module change needed.
+
+## Tally from value (ATEM Aux → GPO tally)
+
+Goal: show the source currently on an ATEM Aux as tally lamps on the GPOs.
+A module cannot read other modules' state, so the link is a **Companion
+variable**:
+
+- The action's `Value` field has `useVariables: true`. In base v2 Companion
+  substitutes `$(atem:…)` before the callback runs; there is no
+  `parseVariablesInString`.
+- The mapping is a list of `value=GPO` pairs. All GPOs in the mapping form
+  one group: the matching one goes on, the others off, in **one
+  `set_gpo_bulk` message**, so two lamps are never lit at the same time.
+- The mapping comes from the connection settings (`tally_mapping`) by
+  default, or per action (`mapping_source: custom`).
+- The user needs one Trigger: _On variable change_ on the ATEM Aux variable
+  → _Tally from value_ (see HELP.md, "Example: ATEM Aux tally").
+
+The ATEM variable itself **cannot** go into the connection settings: in base
+v2 a module can only read its own variables, and Companion does not
+substitute variables in config fields. So the Trigger stays.
+
+Rejected alternative: two Triggers per lamp ("Aux source" feedback becomes
+true/false → Set GPO On/Off). Works without code but needs 2N triggers for N
+cameras.
+
+## GPI select (GPI → ATEM Aux)
+
+The reverse direction. The `gpi_select_mapping` setting (`value=GPI` pairs,
+same parser as the tally mapping) and the `gpi_selected_value` variable:
+when a mapped GPI **closes**, the variable takes the mapped value and keeps
+it (latch). Only `gpi_change` rising edges count. The full `state` snapshot
+is deliberately ignored, so the Aux does not switch by itself when the
+connection (re)starts. The user adds a Trigger: _On variable change_
+`pgpio:gpi_selected_value` → the ATEM _Aux set source_ action, with the
+source field in expression mode.
+
+Known limitation: closing the same GPI twice in a row does not change the
+variable, so the Trigger does not fire again. If this becomes a problem, a
+counter variable or a dedicated trigger event would solve it.
+
+## Optional features and backwards compatibility
+
+Both ATEM features are switched on in the connection settings
+(`tally_enabled`, `gpi_select_enabled`), and both default to off, so
+configurations saved with 1.0.0 behave exactly as before and no upgrade
+script is needed. While a feature is off, its action or variable is **not
+defined at all** (`_applyOptionalFeatures` in `main.js`, run on `init` and
+`configUpdated`). Existing triggers using the action stay inactive as
+"unknown action" and work again when the feature is switched back on.
+
+## Connection behaviour
+
+- GPO commands update the local state optimistically, so feedbacks react
+  without waiting for `gpo_ack`, but **only if the command was actually
+  sent**. While disconnected, buttons keep showing the last known device
+  state, and a warning is logged.
+- With no discovered device and no manual IP address, the module reports
+  _Bad configuration_ instead of staying in _Connecting_ forever.
+- A new Pulse on a pin that is still pulsing restarts the timer; pending
+  pulse timers are cleared on `destroy`.
+
+## Testing
+
+- `npm test` (`node:test`, files in `tests/`):
+  - action callbacks against a fake `self` (tally, Momentary, Pulse),
+  - instance logic on an `Object.create` instance without Companion (GPI
+    select, optional features, missing address),
+  - `DeviceConnection` against a real in-process WebSocket server.
+- `npm run check`: manifest and package structure validation.
+- `npm run mock-device`: simulated board for end-to-end testing in a real
+  Companion.
+- Unit tests do not replace testing with real buttons in Companion. The
+  Momentary pitfalls above could only be reproduced there.
+
+## Open items
+
+1. Test _Tally from value_ and _GPI select_ with a real ATEM. Check the
+   exact name of the Aux variable in the ATEM module (`aux1_input_id`?) and
+   that the ATEM action's source field accepts an expression.
+2. A lifecycle smoke test (`init` / `configUpdated` / `destroy` with a fake
+   `InstanceContext`) would complement the current unit tests.

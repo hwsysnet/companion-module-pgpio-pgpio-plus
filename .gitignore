@@ -3,3 +3,7 @@ node_modules/
 .DS_Store
 *.tgz
 pkg/
+
+# local Claude Code files, not part of the module
+CLAUDE.md
+.claude/

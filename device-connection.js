@@ -184,8 +184,14 @@ export class DeviceConnection extends EventEmitter {
 			case 'hello':
 				this.log(
 					'info',
-					`Device hello: ${msg.device || 'unknown'} fw=${msg.fw_version || 'unknown'} gpi=${msg.gpi_count} gpo=${msg.gpo_count}`
+					`Device hello: ${msg.device || 'unknown'} fw=${msg.fw_version || 'unknown'} gpi=${msg.gpi_count} gpo=${msg.gpo_count}`,
 				)
+				if (msg.gpi_count !== GPI_COUNT || msg.gpo_count !== GPO_COUNT) {
+					this.log(
+						'warn',
+						`Device reports ${msg.gpi_count} GPI / ${msg.gpo_count} GPO; this module expects ${GPI_COUNT} / ${GPO_COUNT}`,
+					)
+				}
 				this.emit('connect', msg)
 				this.requestState()
 				break
@@ -256,20 +262,32 @@ export class DeviceConnection extends EventEmitter {
 		}
 	}
 
+	/**
+	 * The local state is updated optimistically so feedbacks react at once,
+	 * but only if the command actually went out: while disconnected the
+	 * buttons must keep showing what the device really has.
+	 */
 	setGpo(pin, state) {
-		if (pin < 0 || pin >= GPO_COUNT) return
+		if (pin < 0 || pin >= GPO_COUNT) return false
 		const value = state ? 1 : 0
-		this._send({ type: 'set_gpo', pin, state: value })
-		// optimistic local update so feedbacks/variables react immediately
+		if (!this._send({ type: 'set_gpo', pin, state: value })) {
+			this.log('warn', `Not connected, GPO ${pin + 1} was not set`)
+			return false
+		}
 		this._applyGpoChange(pin, value)
+		return true
 	}
 
 	setGpoBulk(pinStates) {
 		// pinStates: array of { pin, state }
-		this._send({ type: 'set_gpo_bulk', pins: pinStates })
+		if (!this._send({ type: 'set_gpo_bulk', pins: pinStates })) {
+			this.log('warn', `Not connected, ${pinStates.length} GPO(s) were not set`)
+			return false
+		}
 		for (const { pin, state } of pinStates) {
 			this._applyGpoChange(pin, state)
 		}
+		return true
 	}
 
 	setAllGpo(state) {

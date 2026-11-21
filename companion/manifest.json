@@ -15,30 +15,20 @@
 		"entrypoint": "../main.js"
 	},
 	"manufacturer": "PGPIO",
-	"products": [
-		"PGPIO+"
-	],
-	"keywords": [
-		"gpio",
-		"tally",
-		"pgpio",
-		"esp32",
-		"websocket",
-		"gpi",
-		"gpo"
-	],
+	"products": ["PGPIO+"],
+	"keywords": ["gpio", "tally", "pgpio", "esp32", "websocket", "gpi", "gpo"],
 	"bonjourQueries": {
 		"bonjour_host": {
 			"type": "pgpio",
 			"protocol": "tcp"
 		}
 	},
-	"bugs": "https://github.com/hwsysnet/companion-module-pgpio-pgpio-plus/issues",
+	"bugs": "https://github.com/bitfocus/companion-module-pgpio-pgpio-plus/issues",
 	"maintainers": [
 		{
 			"name": "Stagehand",
 			"email": "stagehand.hegedus@gmail.com"
 		}
 	],
-	"repository": "git+https://github.com/hwsysnet/companion-module-pgpio-pgpio-plus.git"
+	"repository": "git+https://github.com/bitfocus/companion-module-pgpio-pgpio-plus.git"
 }

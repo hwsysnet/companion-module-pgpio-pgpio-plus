@@ -1,219 +1,203 @@
-# PGPIO+ — WebSocket protokoll specifikáció (v1)
+# PGPIO+ WebSocket protocol (v1)
 
-Ez a dokumentum írja le azt a protokollt, amit a Bitfocus Companion modul
-(ez a repó) és a PGPIO+ board firmware-je közötti kommunikációhoz
-használunk. A cél, hogy a firmware oldal ettől a specifikációtól
-függetlenül, tetszőleges implementációval elkészülhessen (Arduino,
-ESP-IDF, stb.) — a modul csak ezt a szerződést várja el.
+This document specifies the protocol between this Companion module and the
+PGPIO+ board firmware. It is the only contract the module relies on, so the
+firmware can be implemented with any stack (Arduino, ESP-IDF, …) as long as
+it follows this specification.
 
-## Áttekintés
+## Overview
 
-- A **PGPIO+ a WebSocket szerver**, a Companion modul a **WebSocket
-  kliens**. A modul konfigurációjában (Companion webes felületén) adjuk meg
-  a PGPIO+ IP címét, portját és a WS útvonalat (path).
-- Alapértelmezett javasolt path: `/ws`. Alapértelmezett javasolt port:
-  **`32032`** (de ez tetszőleges lehet, a modul konfigból kézzel is
-  állítható — lásd lent a Bonjour/mDNS szekciót az automatikus
-  megtalálásról).
-- Egy időben **egy aktív kapcsolatot** kell kiszolgálni (ha új kliens
-  csatlakozik, a régi kapcsolatot a device lezárhatja/felülírhatja).
-- Minden üzenet egyetlen **JSON objektum egyetlen WebSocket text frame-ben**.
-  Nincs sor-alapú keretezés (nem kell `\n` a végére), a WS frame maga a
-  határoló.
-- A pin indexelés a **vezetéken (wire) 0-alapú** (`0..31`), a Companion UI-n
-  viszont **1-alapú** (`GPI 1` .. `GPI 32`, `GPO 1` .. `GPO 32`) jelenik meg.
-  Tehát a UI "GPI 1" ⇔ wire `pin: 0`.
-- GPI = a device felől jövő bemenetek (kontaktzár / feszültségmentes
-  érintkező érzékelése), GPO = a device kimenetei (relé / tranzisztoros
-  kimenet a tally lámpákhoz).
-- **Logikai polaritás (nagyon fontos, ezen múlik hogy a Companion oldalon
-  minden feedback/változó helyesen mutasson):**
-  - **GPI**: **nyitott** (nincs kontaktzárás, az érintkező szakadt) ⇒
-    `state: 0` (Companion oldalon `false`). **Zárt** (kontaktzárás történt,
-    az érintkező vezet) ⇒ `state: 1` (Companion oldalon `true`).
-  - **GPO**: **nyitott** (a kimenet/relé nincs meghúzva, szakadt az
-    áramkör) ⇒ `state: 0` (Companion oldalon `false`). **Zárt** (a
-    kimenet/relé meg van húzva, zárt az áramkör) ⇒ `state: 1` (Companion
-    oldalon `true`).
-  - Tehát mindkét irányban egységesen: **nyitott = `0`/`false`, zárt =
-    `1`/`true`.** A firmware-nek ezt a konvenciót kell követnie a
-    `gpi_change`/`state`/`gpo_ack` üzenetekben, és ugyanígy kell
-    értelmeznie a `set_gpo`/`set_gpo_bulk` parancsokban kapott `state`
-    értéket (1 = zárja a kimenetet, 0 = nyissa).
+- The **PGPIO+ is the WebSocket server**, the Companion module is the
+  **client**. The board's address, port and WebSocket path are set in the
+  module's connection settings, or found automatically via mDNS (see below).
+- Recommended defaults: path **`/ws`**, port **`32032`**. Both can be
+  changed.
+- The board only needs to serve **one client at a time**. When a new client
+  connects, it may close the previous connection.
+- Every message is a **single JSON object in a single WebSocket text
+  frame**. There is no line framing (no trailing `\n`); the frame is the
+  delimiter.
+- Pin numbers are **0-based on the wire** (`0`–`31`) and **1-based in the
+  Companion UI** (`GPI 1`–`GPI 32`, `GPO 1`–`GPO 32`). UI "GPI 1" is wire
+  `pin: 0`.
+- **GPI** are the board's inputs (dry contact closures), **GPO** its outputs
+  (relays or transistor outputs, e.g. for tally lamps).
 
-## Automatikus eszközkeresés (Bonjour / mDNS) — FONTOS a firmware-nek
+### Logical polarity
 
-A Companion modul konfigurációjában a felhasználónak **nem kötelező kézzel
-megadnia az eszköz IP címét** — a modul megpróbálja automatikusan
-megtalálni a PGPIO+ boardot a helyi hálózaton Bonjour/mDNS-en keresztül
-(ha ez nem sikerül / nem támogatott a hálózaton, a felhasználó kézzel is
-beírhatja az IP-t és portot, ez a fallback megmarad).
+Every feedback and variable in Companion depends on this, so the firmware
+must follow it exactly, in both directions:
 
-Ehhez a **firmware-nek mDNS szolgáltatásként be kell jelentkeznie** a
-hálózatra, az alábbi paraméterekkel:
+|         | Open                                                       | Closed                                                       |
+| ------- | ---------------------------------------------------------- | ------------------------------------------------------------ |
+| **GPI** | contact open, not conducting → `state: 0` (`false`)        | contact closed, conducting → `state: 1` (`true`)             |
+| **GPO** | output/relay released, circuit open → `state: 0` (`false`) | output/relay energised, circuit closed → `state: 1` (`true`) |
 
-- **Szolgáltatás típus (service type):** `_pgpio._tcp` (tehát a teljes
-  mDNS bejegyzés `_pgpio._tcp.local.` lesz)
-- **Port:** a WS szerver ténylegesen használt portja (alapértelmezetten
-  `32032`, de ha a felhasználó/gyártó mást állít be a firmware-en, azt a
-  portot kell hirdetni)
-- TXT rekordra jelenleg nincs szükség, de ha a jövőben több PGPIO+
-  terméktípus is lesz, javasolt egy `model` vagy hasonló TXT mező
-  hozzáadása a megkülönböztetéshez.
+In short: **open = `0` / `false`, closed = `1` / `true`.** This applies to
+the `gpi_change`, `state` and `gpo_ack` messages the board sends, and to the
+`state` field of the `set_gpo` / `set_gpo_bulk` commands it receives
+(`1` = close the output, `0` = open it).
 
-**Arduino/ESP32 (ESPmDNS) minta:**
+## Discovery (Bonjour / mDNS)
+
+Users do not have to enter the board's IP address: the module looks for it on
+the local network via mDNS. Manual IP and port entry remains available as a
+fallback, so mDNS support is recommended but not required.
+
+To be discoverable, the firmware advertises an mDNS service with:
+
+- **Service type:** `_pgpio._tcp` (full name `_pgpio._tcp.local.`)
+- **Port:** the port the WebSocket server actually listens on (default
+  `32032`)
+- **TXT records:** none required today. If more PGPIO+ models appear, a
+  `model` TXT field is the recommended way to tell them apart.
+
+Arduino / ESP32 (`ESPmDNS`):
+
 ```cpp
 #include <ESPmDNS.h>
 
 void setup() {
-  // ... WiFi.begin(...) és a kapcsolódás megvárása után:
-  if (MDNS.begin("pgpio-plus")) {  // a hostname tetszőleges lehet
-    MDNS.addService("pgpio", "tcp", 32032);  // a service type "pgpio", NEM "_pgpio"! az mDNS lib teszi elé az aláhúzást
+  // ... after WiFi.begin() has connected:
+  if (MDNS.begin("pgpio-plus")) {           // any hostname
+    MDNS.addService("pgpio", "tcp", 32032);  // "pgpio", not "_pgpio": the library adds the underscore
   }
 }
 ```
 
-**ESP-IDF (mdns komponens) minta:**
+ESP-IDF (`mdns` component):
+
 ```c
 mdns_init();
 mdns_hostname_set("pgpio-plus");
 mdns_service_add(NULL, "_pgpio", "_tcp", 32032, NULL, 0);
 ```
 
-Ha a firmware nem tud mDNS-t hirdetni, az sem gond — a Companion modulban
-a felhasználó ekkor egyszerűen kézzel adja meg az IP címet és portot (ez a
-korábbi működés, változatlanul támogatott).
+## Connection lifecycle
 
-## Kapcsolat életciklusa
+1. The module opens `ws://<host>:<port><path>`.
+2. Right after the connection opens, the board sends a `hello` message,
+   followed by a full `state` snapshot.
+3. After that the board only sends `gpi_change` events when an input
+   changes. No polling, no periodic resending of the full state.
+4. The module sends a `ping` every 10 seconds; the board answers with
+   `pong`. If the module receives nothing at all from the board for 15
+   seconds (neither `pong` nor any other message), it considers the
+   connection dead and reconnects.
+5. When the connection drops, the module retries automatically (every 5
+   seconds by default, configurable).
+6. Each reconnection starts again at step 1 (`hello` + full `state`).
 
-1. Companion modul TCP/WS kapcsolatot nyit: `ws://<host>:<port><path>`.
-2. Csatlakozás után a device **azonnal küldjön** egy `hello` üzenetet,
-   majd egy teljes `state` snapshotot (lásd lent).
-3. Ezután a device csak **változáskor** küld `gpi_change` eseményt (nem kell
-   pollingolni / nem kell periodikusan újraküldeni a teljes state-et).
-4. A modul időnként (alapértelmezetten 10 másodpercenként) `ping` üzenetet
-   küld. A device-nek erre `pong`-gal kell válaszolnia. Ha a modul 15
-   másodpercig semmilyen üzenetet nem kap a device-től (sem `pong`-ot, sem
-   más eseményt), a kapcsolatot holtnak tekinti és újracsatlakozik.
-5. Ha a kapcsolat megszakad, a modul automatikusan újrapróbálkozik
-   (alapértelmezetten 5 másodpercenként).
-6. Újracsatlakozáskor a folyamat az 1. pontról indul újra (`hello` + teljes
-   `state`).
-
-## Device → Modul üzenetek
+## Board → module messages
 
 ### `hello`
 
-Kötelező, közvetlenül a kapcsolat felépülése után egyszer.
+Required, once, immediately after the connection opens.
 
 ```json
 {
-  "type": "hello",
-  "device": "pgpio-plus",
-  "fw_version": "1.0.0",
-  "gpi_count": 32,
-  "gpo_count": 32
+	"type": "hello",
+	"device": "pgpio-plus",
+	"fw_version": "1.0.0",
+	"gpi_count": 32,
+	"gpo_count": 32
 }
 ```
 
-- `gpi_count` / `gpo_count`: ha nem 32, a modul figyelmeztetést naplóz, de
-  megpróbálja kezelni (a 32-nél kisebbet elfogadja, a 32-nél nagyobbat
-  levágja 32-re). A jelenlegi modul verzió fix 32/32 pinnel dolgozik.
+The module works with a fixed 32 inputs and 32 outputs. If `gpi_count` or
+`gpo_count` differs, it logs a warning and carries on: missing pins read as
+open, pins above 32 are ignored.
 
-### `state` — teljes állapot snapshot
+### `state`: full snapshot
 
-Kötelező, közvetlenül a `hello` után, illetve bármikor amikor a modul
-`get_state`-et kér.
+Required right after `hello`, and whenever the module sends `get_state`.
 
 ```json
 {
-  "type": "state",
-  "gpi": [0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-          0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-  "gpo": [0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-          0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+	"type": "state",
+	"gpi": [0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+	"gpo": [0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
 }
 ```
 
-- Mindkét tömb pontosan 32 elemű, értékei `0` vagy `1`.
-- `gpi[i]` / `gpo[i]` az `i`-edik (0-alapú) bemenet/kimenet állapota.
+- Both arrays have exactly 32 elements, each `0` or `1`.
+- `gpi[i]` / `gpo[i]` is the state of input/output `i` (0-based).
 
-### `gpi_change` — egy bemenet állapotváltozása
+### `gpi_change`: one input changed
 
-Ezt küldi a device minden alkalommal, amikor egy GPI kontaktus állapota
-megváltozik (a debounce-olás a device feladata — a modul nem debounce-ol).
+Sent every time a GPI changes state. Debouncing is the board's job; the
+module does not debounce.
 
 ```json
 { "type": "gpi_change", "pin": 4, "state": 1 }
 ```
 
-- `pin`: 0-alapú index (0-31).
-- `state`: `0` (nyitott kontaktus) vagy `1` (zárt kontaktus) — lásd fent a
-  "Logikai polaritás" pontot.
-- Opcionálisan tartalmazhat `ts` mezőt (device uptime ms), a modul ezt
-  figyelmen kívül hagyja.
+- `pin`: 0-based index (0–31).
+- `state`: `0` (open) or `1` (closed), see [Logical polarity](#logical-polarity).
+- An optional `ts` field (board uptime in ms) is allowed and ignored.
 
-### `gpo_ack` — kimenet visszaigazolása (ajánlott, nem kötelező)
+### `gpo_ack`: output confirmation (recommended, optional)
 
-Miután a device végrehajtott egy `set_gpo` parancsot, visszaigazolhatja:
+After executing a `set_gpo` command the board may confirm the new state:
 
 ```json
 { "type": "gpo_ack", "pin": 10, "state": 1 }
 ```
 
-Ha a device ezt nem küldi, a modul optimistán a parancsban küldött értéket
-tekinti aktuális állapotnak.
+Without it, the module treats the value it sent as the current state.
 
 ### `pong`
 
-Válasz a modul `ping` üzenetére, kapcsolat életben-tartás ellenőrzésére:
+Answer to `ping`, used as a keep-alive:
 
 ```json
 { "type": "pong" }
 ```
 
-### `error` (opcionális)
+### `error` (optional)
 
 ```json
-{ "type": "error", "message": "leírás a hibáról" }
+{ "type": "error", "message": "description of the problem" }
 ```
 
-A modul ezt csak naplózza, funkcionálisan nem kezeli másképp.
+The module only logs it.
 
-## Modul → Device üzenetek
+## Module → board messages
 
-### `set_gpo` — egyetlen kimenet állítása
+### `set_gpo`: set one output
 
 ```json
 { "type": "set_gpo", "pin": 10, "state": 1 }
 ```
 
-- `state`: `1` = zárja a kimenetet (relé meghúz), `0` = nyissa (relé
-  elenged) — lásd fent a "Logikai polaritás" pontot.
+`state`: `1` closes the output (relay energised), `0` opens it.
 
-### `set_gpo_bulk` — több kimenet egyszerre
+### `set_gpo_bulk`: set several outputs at once
 
 ```json
 {
-  "type": "set_gpo_bulk",
-  "pins": [
-    { "pin": 0, "state": 1 },
-    { "pin": 1, "state": 0 },
-    { "pin": 2, "state": 1 }
-  ]
+	"type": "set_gpo_bulk",
+	"pins": [
+		{ "pin": 0, "state": 1 },
+		{ "pin": 1, "state": 0 },
+		{ "pin": 2, "state": 1 }
+	]
 }
 ```
 
-Ezt használja a modul pl. az "összes GPO törlése" akcióhoz (minden pin
-`state: 0`).
+Used for "all outputs on/off" and for tally groups, where switching one lamp
+on and the others off must happen together. The board should apply all
+listed pins in one go, without visible intermediate states. A reply is
+optional: the board may answer with a `state` snapshot or with one `gpo_ack`
+per pin, or not at all.
 
-### `get_state` — teljes állapot lekérése
+### `get_state`: request the full state
 
 ```json
 { "type": "get_state" }
 ```
 
-Erre a device a fenti `state` üzenettel válaszol.
+The board answers with a `state` message.
 
 ### `ping`
 
@@ -221,64 +205,53 @@ Erre a device a fenti `state` üzenettel válaszol.
 { "type": "ping" }
 ```
 
-A device-nek `pong`-gal kell válaszolnia (lásd fent).
+The board answers with `pong`.
 
-## Hibatűrés / elvárások a firmware felé
+## Robustness and timing requirements
 
-- A JSON parse hibát okozó vagy ismeretlen `type` mezőjű bejövő üzeneteket
-  a device egyszerűen hagyja figyelmen kívül (ne omoljon össze rajta).
-- Ha egyszerre két Companion-modul-kliens próbál csatlakozni, elég az
-  utolsó kapcsolatot kiszolgálni, a régit le lehet zárni.
-- A GPI bemeneteknél a debounce (kontaktzár zajszűrés) a device felelőssége
-  — a modul minden `gpi_change` üzenetet azonnal, szűrés nélkül feldolgoz.
-- **Valós idejűség / időzítés — kritikus.** Ezt a rendszert **kb. 0,5
-  másodperces pontosságú vezérlésekhez** használjuk (pl. tally váltás
-  élő adásban), ezért a device-firmware-nek **azonnal**, mesterséges
-  késleltetés vagy batchelés nélkül kell küldenie a `gpi_change`
-  üzeneteket, amint egy bemenet állapota (a debounce lezárása után)
-  megváltozik. Ökölszabály:
-  - A debounce idő legyen **rövid** (javasolt: kb. 5-20 ms — pont annyi,
-    hogy a kontaktzár zajt kiszűrje, de ne adjon hozzá érezhető
-    késleltetést).
-  - Ne gyűjtsd össze / ne késleltesd a `gpi_change` üzeneteket egy közös
-    időzítő ciklusra (pl. ne csak 100ms-onként egy "loop"-ban ellenőrizd
-    és küldd ki a változásokat) — minden pin-váltás azonnal, önállóan
-    generáljon egy üzenetet.
-  - Ugyanez vonatkozik a `set_gpo` parancsok végrehajtására is: a
-    kimenetet a parancs vételét követően azonnal (érezhető
-    késleltetés — pl. egy lassú loop-ciklus — nélkül) állítsd be, majd
-    (ha támogatott) azonnal küldd vissza a `gpo_ack`-et.
-- WiFi kapcsolat elvesztése esetén a device a saját logikája szerint
-  próbáljon újracsatlakozni a WiFi-hez; a WS szerver ettől függetlenül
-  induljon el újra, amint van hálózat.
+- Ignore incoming messages that are not valid JSON or have an unknown
+  `type`. They must never crash the firmware.
+- If two clients try to connect, serving the most recent one is enough; the
+  older connection may be closed.
+- Debouncing of GPI contacts is the board's responsibility; the module
+  processes every `gpi_change` immediately.
+- **Timing is critical.** The system is used for control with roughly 0.5 s
+  accuracy (e.g. tally switching during a live show), so:
+  - Keep the debounce time short (about 5–20 ms): enough to filter contact
+    bounce, too short to notice.
+  - Send each `gpi_change` as soon as the debounced input changes. Do not
+    collect changes and send them from a periodic loop (e.g. every 100 ms);
+    every change produces its own message immediately.
+  - Execute `set_gpo` commands as soon as they arrive, then send `gpo_ack`
+    (if supported) right away.
+- If WiFi drops, the board reconnects on its own and restarts the WebSocket
+  server as soon as the network is back.
 
-## Minta üzenetváltás
+## Example exchange
 
 ```
-Device connect →
-Device: {"type":"hello","device":"pgpio-plus","fw_version":"1.0.0","gpi_count":32,"gpo_count":32}
-Device: {"type":"state","gpi":[0,0,...0],"gpo":[0,0,...0]}
+Board accepts the connection
+Board:  {"type":"hello","device":"pgpio-plus","fw_version":"1.0.0","gpi_count":32,"gpo_count":32}
+Board:  {"type":"state","gpi":[0,0,...0],"gpo":[0,0,...0]}
 
-(valaki megnyom egy gombot a Companion felületen, GPO 3-at bekapcsolja)
-Modul → Device: {"type":"set_gpo","pin":2,"state":1}
-Device → Modul: {"type":"gpo_ack","pin":2,"state":1}   (opcionális)
+(a Companion button switches GPO 3 on)
+Module: {"type":"set_gpo","pin":2,"state":1}
+Board:  {"type":"gpo_ack","pin":2,"state":1}   (optional)
 
-(egy kontaktzár záródik a device-en, GPI 5)
-Device → Modul: {"type":"gpi_change","pin":4,"state":1}
+(a contact on GPI 5 closes)
+Board:  {"type":"gpi_change","pin":4,"state":1}
 
-(10 mp után a modul életjelet kér)
-Modul → Device: {"type":"ping"}
-Device → Modul: {"type":"pong"}
+(10 s later, keep-alive)
+Module: {"type":"ping"}
+Board:  {"type":"pong"}
 ```
 
-## Tesztelés
+## Testing without hardware
 
-A repóban van egy `mock-device/mock-esp32.js` Node.js script, ami egy
-minimális WebSocket szervert indít, és pontosan ezt a protokollt beszéli
-(véletlenszerű GPI változásokat generál, és naplózza a kapott `set_gpo`
-parancsokat). Ezzel a Companion modul a valódi hardver nélkül is
-tesztelhető, és a hardveres kollégának is jó referencia lehet a firmware
-elkészítéséhez:
+`mock-device/mock-esp32.js` is a minimal WebSocket server that speaks this
+protocol: it generates random GPI changes and logs the commands it receives.
+Use it to test the module without a board, or as a reference when writing
+the firmware:
 
 ```bash
 npm run mock-device

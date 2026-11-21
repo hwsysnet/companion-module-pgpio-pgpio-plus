@@ -51,5 +51,41 @@ export function getConfigFields() {
 			min: 1000,
 			max: 60000,
 		},
+		{
+			type: 'checkbox',
+			id: 'tally_enabled',
+			label: 'Enable "Tally from value" action',
+			width: 12,
+			default: false,
+			tooltip: 'Drive a group of GPOs from a value, e.g. the source of an ATEM Aux',
+		},
+		{
+			type: 'textinput',
+			id: 'tally_mapping',
+			label: 'Tally mapping (value=GPO, ...)',
+			width: 12,
+			isVisibleExpression: '$(options:tally_enabled)',
+			default: '',
+			tooltip:
+				'Default mapping for the "Tally from value" action, e.g. "1=1, 2=2, 3=3" (value = ATEM input ID). The GPO mapped to the current value is switched on, the other listed GPOs off.',
+		},
+		{
+			type: 'checkbox',
+			id: 'gpi_select_enabled',
+			label: 'Enable GPI select (gpi_selected_value variable)',
+			width: 12,
+			default: false,
+			tooltip: 'Set a variable from the last closed GPI, e.g. to switch an ATEM Aux from GPI contacts',
+		},
+		{
+			type: 'textinput',
+			id: 'gpi_select_mapping',
+			label: 'GPI select mapping (value=GPI, ...)',
+			width: 12,
+			isVisibleExpression: '$(options:gpi_select_enabled)',
+			default: '',
+			tooltip:
+				'When a listed GPI closes, the gpi_selected_value variable is set to its value, e.g. "1=1, 2=2, 3=3" (value = ATEM input ID). Use it in a trigger to switch an ATEM Aux. Leave empty to disable.',
+		},
 	]
 }
