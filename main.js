@@ -1,11 +1,12 @@
 import { InstanceBase, InstanceStatus } from '@companion-module/base'
 import { getConfigFields } from './config.js'
-import { getActions, parseTallyMapping } from './actions.js'
+import { getActions } from './actions.js'
+import { isBmdMode, mappingFromConfig } from './mapping.js'
 import { getFeedbacks } from './feedbacks.js'
 import { getVariableDefinitions, gpiVariableValues, gpoVariableValues, toBool } from './variables.js'
 import { getPresets } from './presets.js'
 import UpgradeScripts from './upgrades.js'
-import { DeviceConnection, GPI_COUNT } from './device-connection.js'
+import { DeviceConnection } from './device-connection.js'
 
 export default class PgpioPlusInstance extends InstanceBase {
 	async init(config, _isFirstInit, _secrets) {
@@ -37,9 +38,9 @@ export default class PgpioPlusInstance extends InstanceBase {
 	}
 
 	async configUpdated(config, _secrets) {
-		const gpiSelectWasEnabled = !!this.config.gpi_select_enabled
+		const previous = this.config
 		this.config = config
-		this._applyOptionalFeatures(gpiSelectWasEnabled)
+		this._applyOptionalFeatures(previous)
 		// stop() does not emit 'disconnect', so clear the connection state here
 		this.device.stop()
 		this._setDeviceStatus(false)
@@ -89,17 +90,25 @@ export default class PgpioPlusInstance extends InstanceBase {
 	 * Tally from value / GPI select are switched on and off in the connection
 	 * settings: their action and variable only exist while enabled.
 	 */
-	_applyOptionalFeatures(gpiSelectWasEnabled = false) {
+	_applyOptionalFeatures(previous = {}) {
+		const gpiSelectWasEnabled = !!previous.gpi_select_enabled
+		const bmdWasOn = isBmdMode(previous)
 		this.setActionDefinitions(getActions(this))
 		this.setVariableDefinitions(getVariableDefinitions(this.config))
 
-		// GPI pin (0-based) -> value; stays empty while GPI select is disabled
+		// GPI pin (0-based) -> { key, aux }; stays empty while GPI select is disabled
 		this.gpiSelect = new Map()
 		if (this.config.gpi_select_enabled) {
-			const { pairs, errors } = parseTallyMapping(String(this.config.gpi_select_mapping ?? ''), GPI_COUNT)
-			for (const err of errors) this.log('warn', `GPI select mapping: ${err}`)
-			this.gpiSelect = new Map(pairs.map(({ key, pin }) => [pin, key]))
-			if (!gpiSelectWasEnabled) this.setVariableValues({ gpi_selected_value: '' })
+			const pairs = mappingFromConfig(this.config, 'gpi_select', 'GPI', { aux: true })
+			this.gpiSelect = new Map(pairs.map(({ key, pin, aux }) => [pin, { key, aux }]))
+			if (!gpiSelectWasEnabled) {
+				this.gpiSelectSeq = 0
+				this.setVariableValues({ gpi_selected_value: '', gpi_select_seq: 0 })
+			}
+			// the Aux variable only exists in BMD mode; clear it whenever it (re)appears
+			if (isBmdMode(this.config) && (!gpiSelectWasEnabled || !bmdWasOn)) {
+				this.setVariableValues({ gpi_selected_aux: '' })
+			}
 		}
 	}
 
@@ -126,10 +135,16 @@ export default class PgpioPlusInstance extends InstanceBase {
 
 		this.device.on('gpi_change', (pin, state) => {
 			const values = gpiVariableValues(this.device.gpi)
-			// only a closing contact selects; the value latches until another mapped GPI closes
+			// only a closing contact selects; the value latches until another mapped GPI closes.
+			// The counter rises on every mapped close, so a trigger watching it also fires
+			// when the same GPI closes again or two rows share a value.
 			if (state && this.gpiSelect.has(pin)) {
-				values.gpi_selected_value = this.gpiSelect.get(pin)
-				this.log('debug', `GPI ${pin + 1} closed -> gpi_selected_value=${values.gpi_selected_value}`)
+				const { key, aux } = this.gpiSelect.get(pin)
+				this.gpiSelectSeq = (this.gpiSelectSeq ?? 0) + 1
+				values.gpi_selected_value = key
+				if (aux !== undefined) values.gpi_selected_aux = aux
+				values.gpi_select_seq = this.gpiSelectSeq
+				this.log('debug', `GPI ${pin + 1} closed -> value ${key}${aux ? ` to Aux ${aux}` : ''} (#${this.gpiSelectSeq})`)
 			}
 			this.setVariableValues(values)
 			this.checkFeedbacks('gpi_state')

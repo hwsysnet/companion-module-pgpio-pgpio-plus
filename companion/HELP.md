@@ -20,12 +20,19 @@ is suitable for control with around 0.5 s accuracy.
    **WebSocket path** defaults to `/ws`.
 2. **Optional features.** Both are off by default. While a feature is off,
    its action or variable does not appear at all.
-   - **Enable "Tally from value" action** with **Tally mapping**: drive tally
+   - **Enable "Tally from value" action** with its value → GPO rows: drive tally
      lamps from a value such as an ATEM Aux source. See
      [Example: ATEM Aux tally](#example-atem-aux-tally).
-   - **Enable GPI select** with **GPI select mapping**: set a variable from
+   - **Enable GPI select** with its value → GPI rows: set a variable from
      GPI contacts, e.g. to switch an ATEM Aux. See
      [Example: switch an ATEM Aux from GPI](#example-switch-an-atem-aux-from-gpi).
+   - **BMD mode (Blackmagic ATEM)**, on by default, shapes the rows of both
+     features for an ATEM: the value is picked from a list of ATEM sources
+     (other values can still be typed) and GPI select rows choose a target
+     Aux. Switch it off for other switchers or modules: the value becomes a
+     plain text field (e.g. `CAM1`) and there is no Aux and no
+     `gpi_selected_aux` variable. Values entered in either mode are kept
+     when switching.
 
 The connection state appears in the Companion connection status, in the
 **Device connection status** feedback and in the `device_status` variable.
@@ -49,9 +56,9 @@ The board firmware must implement the protocol described in
 - **Tally from value** (when enabled): drive a group of outputs from one
   value, for example the source currently on an ATEM Aux.
   - **Value** accepts variables, e.g. `$(atem:aux1_input_id)`.
-  - **Mapping** is a comma separated list of `value=GPO` pairs, e.g.
-    `1=1, 2=2, 3=3`. By default it comes from the connection settings
-    (**Tally mapping**); choose **Custom** to set it on the action.
+  - **Mapping**: by default the value → GPO rows of the connection settings.
+    Choose **Custom** to type it on the action as a comma separated list of
+    `value=GPO` pairs, e.g. `1=1, 2=2, 3=3`.
   - The output mapped to the current value goes on and every other output
     in the mapping goes off, in a single command, so two tallies are never
     lit together. A value with no match (e.g. Color Bars) switches them all
@@ -82,6 +89,11 @@ All variables are booleans (`true` / `false`), not numbers or text.
 - `gpi_selected_value` (when GPI select is enabled): the mapped value of the
   last mapped input that closed. It keeps its value until another mapped
   input closes, and is empty until the first one does. This one is text.
+- `gpi_selected_aux` (GPI select in BMD mode): the Aux number of the row
+  of the last mapped input that closed (`1` = Aux 1); empty until the first
+  one does.
+- `gpi_select_seq` (when GPI select is enabled): a counter that rises by one
+  on every close of a mapped input. Watch this one in a trigger.
 
 ## Presets
 
@@ -95,9 +107,10 @@ for each output:
 
 To light the tally lamp of the source currently on an ATEM Aux output:
 
-1. In the connection settings, tick **Enable "Tally from value" action** and
-   set **Tally mapping**, e.g. `1=1, 2=2, 3=3, 4=4` (ATEM input ID = GPO
-   number).
+1. In the connection settings, tick **Enable "Tally from value" action**,
+   set **Number of entries** and pick a source and a GPO in each row, e.g.
+   Input 1 → GPO 1, Input 2 → GPO 2. The source list holds the usual ATEM
+   sources; any other value can be typed in.
 2. On the Triggers tab, create a trigger with the event **On variable
    change** on the ATEM Aux source variable, e.g. `atem:aux1_input_id`
    (check the exact name in the Variables list of your ATEM connection).
@@ -115,19 +128,30 @@ trigger per Aux, each with its own custom mapping.
 
 ## Example: switch an ATEM Aux from GPI
 
-The reverse direction, where GPI contacts select the source of an ATEM Aux:
+The reverse direction, where GPI contacts select the source of one or more
+ATEM Aux outputs:
 
-1. In the connection settings, tick **Enable GPI select** and set **GPI
-   select mapping** to `value=GPI` pairs, e.g. `1=1, 2=2, 3=3, 4=4` (ATEM
-   input ID = GPI number). When a listed input closes, `gpi_selected_value`
-   takes its value.
-2. Create a trigger with the event **On variable change** on
-   `pgpio:gpi_selected_value` (use your connection's label instead of
-   `pgpio`), and the ATEM connection's **Aux/Output: Set source** action with
-   the source field switched to expression mode and set to
+1. In the connection settings, tick **Enable GPI select**, leave **BMD
+   mode** on, set **Number of entries** and fill in each row:
+   source → GPI → Aux, e.g.
+   Input 1 → GPI 1 → Aux 1, Input 2 → GPI 2 → Aux 1, Input 2 → GPI 5 → Aux 2.
+   When a listed GPI closes:
+   - `gpi_selected_value` takes the source of its row (the ATEM source ID,
+     e.g. `2`),
+   - `gpi_selected_aux` takes its Aux number (`1` = Aux 1),
+   - `gpi_select_seq` rises by one, on every close, even when the same GPI
+     closes again.
+2. The module cannot switch the ATEM itself; a trigger does that. On the
+   Triggers tab, create a group named **PGPIO+ Triggers** to keep the
+   triggers that belong to this module together.
+3. In that group, create a trigger with the event **On variable change** on
+   `pgpio:gpi_select_seq` (use your connection's label instead of `pgpio`),
+   and the ATEM connection's **Aux/Output: Set source** action. Switch both
+   fields to expression mode: Aux `$(pgpio:gpi_selected_aux)`, source
    `$(pgpio:gpi_selected_value)`.
+4. If the Aux field of your ATEM module version cannot be switched to
+   expression mode, create one trigger per Aux instead, each with the same
+   event, a fixed Aux in the action and the condition
+   `$(pgpio:gpi_selected_aux) == 2` (the Aux number of that trigger).
 
-Combined with the Aux tally example, the tally follows the switch. Note that
-closing the same input twice in a row does not fire the trigger again,
-because the variable does not change. If the Aux was switched elsewhere in
-the meantime, close a different input first.
+Combined with the Aux tally example, the tally follows the switch.

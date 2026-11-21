@@ -6,11 +6,12 @@ the firmware contract in [PROTOCOL.md](PROTOCOL.md), and the developer quick
 start in [README.md](README.md). This file does not repeat them; it explains
 why things are the way they are.
 
-## Status (1.4.1)
+## Status (1.5.0)
 
 - Feature complete: connection handling, GPO actions (set, toggle,
   momentary, pulse, all), GPI/GPO feedbacks and variables, presets, and the
-  two optional ATEM-oriented features (tally from value, GPI select).
+  two optional ATEM-oriented features (tally from value, GPI select), whose
+  mappings are rows of dropdowns since 1.5.0, with BMD mode and Aux selection.
 - `npm test` and `npm run check` pass.
 - Not yet tested against a real ATEM. The tally and GPI select features are
   covered by unit tests only (see [Open items](#open-items)).
@@ -22,10 +23,11 @@ why things are the way they are.
 | Step                                                                                  | State                                                                        |
 | ------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
 | `v1.4.1` tagged and pushed to `github.com/hwsysnet/companion-module-pgpio-pgpio-plus` | Done                                                                         |
-| Installable package `pgpio-pgpio-plus-1.4.1.tgz` built for in-house devices           | Done                                                                         |
+| `v1.5.0` tagged and pushed to `github.com/hwsysnet/companion-module-pgpio-pgpio-plus` | Done                                                                         |
+| Installable package `pgpio-pgpio-plus-1.5.0.tgz` built for in-house devices           | Done                                                                         |
 | Repository request on the Developer Portal                                            | Submitted 2026-11-21, awaiting review (questions arrive on the request page) |
-| Push code and `v1.4.1` tag to the new Bitfocus repository                             | Waiting                                                                      |
-| Submit `v1.4.1` on the portal (_My Connections_ → _Submit Version_)                   | Waiting                                                                      |
+| Push code and tags to the new Bitfocus repository                                     | Waiting                                                                      |
+| Submit `v1.5.0` on the portal (_My Connections_ → _Submit Version_)                   | Waiting                                                                      |
 
 Until the Bitfocus repository exists, the repository URLs in `package.json`,
 `companion/manifest.json` and the PROTOCOL.md link in HELP.md point to a
@@ -39,12 +41,11 @@ Snapshot at the end of the 2026-11-21 session:
 - Project location: `~/Projects/pgpio-plus` (moved from
   `~/Projects/Companion-Dev-Modules/pgpio-plus`, which no longer exists).
 - Git: `main` is clean and in sync with
-  `github.com/hwsysnet/companion-module-pgpio-pgpio-plus`. Tag `v1.4.1`
-  points to `ca9cfe4` (the last code change); the commits after it only
-  touch documentation.
-- `npm test` (22 tests), `npm run check`, ESLint with the Companion config
+  `github.com/hwsysnet/companion-module-pgpio-pgpio-plus`. Tag `v1.5.0`
+  points to the 1.5.0 release commit.
+- `npm test` (34 tests), `npm run check`, ESLint with the Companion config
   and prettier all pass.
-- `pgpio-pgpio-plus-1.4.1.tgz` is in the project root for in-house devices
+- `pgpio-pgpio-plus-1.5.0.tgz` is in the project root for in-house devices
   (not in git; rebuild with `npm run package`).
 
 Next steps, in order:
@@ -57,7 +58,7 @@ Next steps, in order:
    ```bash
    git remote add bitfocus https://github.com/bitfocus/companion-module-pgpio-pgpio-plus.git
    git push bitfocus main
-   git push bitfocus v1.4.1
+   git push bitfocus --tags
    ```
 
    Check that the repository URLs in `package.json` and
@@ -65,8 +66,8 @@ Next steps, in order:
    resolve.
 
 3. **Submit the version** on the portal: _My Connections_ → the module →
-   _Submit Version_ → `v1.4.1`. Review feedback arrives on the portal; fixes
-   go out as `1.4.2` and so on, following [Releasing](#releasing).
+   _Submit Version_ → `v1.5.0`. Review feedback arrives on the portal; fixes
+   go out as `1.5.1` and so on, following [Releasing](#releasing).
 4. Independently of the release: the [Open items](#open-items) below (real
    ATEM test, lifecycle smoke test).
 
@@ -129,6 +130,12 @@ package_ → select the file. After the import, edit each PGPIO+ connection
 and select the new version if Companion does not switch to it
 automatically. Existing connection settings are kept; options added since
 1.0.0 default to off.
+
+For a beta next to the live version, give `package.json` a prerelease
+version (`npm version 1.5.0-beta.1 --no-git-tag-version`) and build with
+`npx companion-module-build --prerelease`, which sets `isPrerelease` in the
+packaged manifest. Companion keeps both versions; each connection uses the
+one selected in its settings.
 
 ### Package manager
 
@@ -257,6 +264,44 @@ defined at all** (`_applyOptionalFeatures` in `main.js`, run on `init` and
 `configUpdated`). Existing triggers using the action stay inactive as
 "unknown action" and work again when the feature is switched back on.
 
+## Mapping rows in the connection settings
+
+Companion config fields cannot form a table, so each mapping (tally:
+value → GPO, GPI select: value → GPI) is a `<prefix>_count` number field
+followed by 32 fixed rows of two dropdowns (`<prefix>_value_n`,
+`<prefix>_gpo_n` / `<prefix>_gpi_n`), built in `mapping.js`. Rows beyond the
+count are hidden with `isVisibleExpression` and ignored by
+`mappingFromConfig`. The value dropdown lists ATEM source IDs (from memory,
+still to be checked against a real ATEM) with `allowCustom`, so other
+modules' values can be typed. A count or row that was never saved falls back
+to the field defaults (4 rows, Input n → pin n), matching what the settings
+page shows.
+
+Until 1.4.1 the mappings were text fields (`tally_mapping`,
+`gpi_select_mapping`, `"1=1, 2=2"`). The upgrade script in `upgrades.js`
+converts them into rows and drops invalid entries, which were already
+ignored. The action's **Custom** mapping is still text: a table of 64 fields
+would be too large inside an action.
+
+GPI select rows have a third dropdown, the target Aux (1-24, default 1), which
+goes into `gpi_selected_aux`. A module cannot create triggers or call another
+module's actions, so the ATEM switching stays in a user trigger, documented
+in HELP.md (group "PGPIO+ Triggers"). The trigger watches `gpi_select_seq`,
+a counter that rises on every mapped close: watching `gpi_selected_value`
+missed a repeated close and a second Aux with the same source. In the ATEM
+module (`src/actions/aux-outputs.ts`) the `aux` option is 1-based
+(`setAuxSource(input, options.aux - 1)`) and the source field accepts
+expressions; whether the `aux` dropdown can be switched to expression mode
+is still to be checked, hence the per-Aux trigger fallback in HELP.md.
+
+`bmd_mode` (default on, read through `isBmdMode`) switches the rows between
+the ATEM shape (source dropdown `<prefix>_value_n`, Aux dropdown) and a
+generic one (text field `<prefix>_text_n`, no Aux, no `gpi_selected_aux`).
+The two value fields have separate ids, so neither mode overwrites the other;
+`mappingToConfig` (used by the upgrade) fills both. A second upgrade script
+writes `bmd_mode: true` into saved configs, because the settings page
+evaluates `isVisibleExpression` against the saved value, not the default.
+
 ## Connection behaviour
 
 - GPO commands update the local state optimistically, so feedbacks react
@@ -295,8 +340,13 @@ defined at all** (`_applyOptionalFeatures` in `main.js`, run on `init` and
 
 ## Open items
 
-1. Test _Tally from value_ and _GPI select_ with a real ATEM. Check the
-   exact name of the Aux variable in the ATEM module (`aux1_input_id`?) and
-   that the ATEM action's source field accepts an expression.
-2. A lifecycle smoke test (`init` / `configUpdated` / `destroy` with a fake
+1. Test _Tally from value_ and _GPI select_ with a real ATEM. The ATEM
+   module source shows `aux{N}_input_id` (1-based) and an expression-capable
+   source field; still to check: whether the Aux field of _Aux/Output: Set
+   source_ can be switched to expression mode, and the ATEM source IDs in
+   the source list (Color Bars `1000` is not confirmed from the code).
+2. Check the mapping rows in a real Companion: row visibility with the
+   count and BMD mode, typing a custom value, and the upgrade of a 1.4.1
+   text mapping.
+3. A lifecycle smoke test (`init` / `configUpdated` / `destroy` with a fake
    `InstanceContext`) would complement the current unit tests.

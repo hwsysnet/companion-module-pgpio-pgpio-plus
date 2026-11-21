@@ -96,7 +96,14 @@ test('tally: empty mapping sends nothing', async () => {
 })
 
 test('tally: mapping_source=config uses the connection settings', async () => {
-	const self = fakeSelf({ tally_enabled: true, tally_mapping: '1=3, 2=4' })
+	const self = fakeSelf({
+		tally_enabled: true,
+		tally_count: 2,
+		tally_value_1: '1',
+		tally_gpo_1: 3,
+		tally_value_2: '2',
+		tally_gpo_2: 4,
+	})
 	await getActions(self).tally_from_value.callback({ options: { value: '2', mapping_source: 'config' } })
 	assert.deepEqual(self.sent, [
 		[

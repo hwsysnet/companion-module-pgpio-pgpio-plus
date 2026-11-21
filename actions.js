@@ -1,4 +1,5 @@
 import { GPO_COUNT } from './device-connection.js'
+import { mappingFromConfig } from './mapping.js'
 
 function pinChoices(count) {
 	const choices = []
@@ -11,7 +12,8 @@ function pinChoices(count) {
 /**
  * Parses "1=1, 2=2, cam3=3" into [{ key: '1', pin: 0 }, ...] (pin is 0-based).
  * Pairs may be separated by commas, semicolons or newlines.
- * Shared by the "Tally from value" action (value=GPO) and the GPI select config (value=GPI).
+ * Used by the custom mapping of the "Tally from value" action, and by the upgrade
+ * script that converts the old text mappings of the connection settings into rows.
  */
 export function parseTallyMapping(text, pinCount = GPO_COUNT) {
 	const pairs = []
@@ -155,7 +157,7 @@ export function getActions(self) {
 					default: 'config',
 					disableAutoExpression: true,
 					choices: [
-						{ id: 'config', label: 'From connection settings (Tally mapping)' },
+						{ id: 'config', label: 'From connection settings' },
 						{ id: 'custom', label: 'Custom (below)' },
 					],
 				},
@@ -173,11 +175,19 @@ export function getActions(self) {
 				const value = String(event.options.value ?? '')
 					.trim()
 					.toLowerCase()
-				const mapping = event.options.mapping_source === 'custom' ? event.options.mapping : self.config.tally_mapping
-				const { pairs, errors } = parseTallyMapping(String(mapping ?? ''))
-				for (const err of errors) self.log('warn', `Tally from value: ${err}`)
+				let pairs
+				if (event.options.mapping_source === 'custom') {
+					const parsed = parseTallyMapping(String(event.options.mapping ?? ''))
+					for (const err of parsed.errors) self.log('warn', `Tally from value: ${err}`)
+					pairs = parsed.pairs
+				} else {
+					pairs = mappingFromConfig(self.config, 'tally', 'GPO')
+				}
 				if (pairs.length === 0) {
-					self.log('warn', 'Tally from value: no mapping set (connection settings "Tally mapping" or custom mapping)')
+					self.log(
+						'warn',
+						'Tally from value: no mapping set (tally rows in the connection settings, or custom mapping)',
+					)
 					return
 				}
 

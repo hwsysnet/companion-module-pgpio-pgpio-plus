@@ -1,4 +1,5 @@
 import { GPI_COUNT, GPO_COUNT } from './device-connection.js'
+import { isBmdMode } from './mapping.js'
 
 // Polarity contract with the firmware (see PROTOCOL.md "Logical polarity"):
 // open contact / de-energized relay = 0 (false), closed contact / energized relay = 1 (true).
@@ -11,7 +12,11 @@ export function getVariableDefinitions(config) {
 
 	vars.device_status = { name: 'Device connection status (boolean)' }
 	if (config.gpi_select_enabled) {
-		vars.gpi_selected_value = { name: 'Value of the last closed GPI from the GPI select mapping' }
+		vars.gpi_selected_value = { name: 'GPI select: source value of the last closed mapped GPI' }
+		if (isBmdMode(config)) {
+			vars.gpi_selected_aux = { name: 'GPI select: Aux number (1-based) of the last closed mapped GPI' }
+		}
+		vars.gpi_select_seq = { name: 'GPI select: counter, rises on every mapped GPI close (watch it in a trigger)' }
 	}
 
 	for (let i = 0; i < GPI_COUNT; i++) {

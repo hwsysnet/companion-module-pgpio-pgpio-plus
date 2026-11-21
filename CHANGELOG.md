@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.5.0 (2026-11-21)
+
+### Changed
+
+- The tally and GPI select mappings in the connection settings are edited
+  as rows of two dropdowns (source → GPO / GPI) instead of typed
+  `1=1, 2=2` text. The source list offers the usual ATEM sources and accepts
+  any other value. Existing text mappings are converted automatically.
+- GPI select rows also choose the target Aux (source → GPI → Aux). New
+  variables: `gpi_selected_aux` (the Aux of the last closed GPI) and
+  `gpi_select_seq` (rises on every mapped close, for the trigger to watch,
+  so closing the same GPI twice switches again). Existing rows target Aux 1.
+- **BMD mode** (on by default) for the tally and GPI select rows: ATEM
+  source list and Aux selection. With it off, the value is a plain text
+  field and there is no Aux, for other switchers and modules.
+
 ## 1.4.1 (2026-11-21)
 
 First version prepared for publication through the Bitfocus Developer

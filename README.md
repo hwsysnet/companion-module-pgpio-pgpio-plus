@@ -53,9 +53,10 @@ manually: host `127.0.0.1`, port `32032`, path `/ws`.
 | `config.js`                 | Connection settings: discovery, IP, port, path, reconnect, optional features                  |
 | `actions.js`                | Set GPO, Pulse GPO, Tally from value, Set all GPO, Request state                              |
 | `feedbacks.js`              | Connection, GPI and GPO state feedbacks                                                       |
-| `variables.js`              | `device_status`, `gpi_1..32`, `gpo_1..32`, `gpi_selected_value`                               |
+| `variables.js`              | `device_status`, `gpi_1..32`, `gpo_1..32`, GPI select variables                               |
 | `presets.js`                | Ready-made buttons for every GPI/GPO pin                                                      |
-| `upgrades.js`               | Config upgrade scripts (none needed so far)                                                   |
+| `upgrades.js`               | Config upgrade scripts (text mappings → rows)                                                 |
+| `mapping.js`                | Value → pin (→ Aux) rows of the connection settings                                           |
 | `tests/`                    | Unit tests                                                                                    |
 | `mock-device/mock-esp32.js` | Simulated board for local testing                                                             |
 
