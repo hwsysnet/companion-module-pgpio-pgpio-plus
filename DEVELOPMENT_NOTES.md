@@ -32,6 +32,44 @@ Until the Bitfocus repository exists, the repository URLs in `package.json`,
 page that does not exist yet. This is intentional: they are correct for the
 published module.
 
+### Picking up from here
+
+Snapshot at the end of the 2026-11-21 session:
+
+- Project location: `~/Projects/pgpio-plus` (moved from
+  `~/Projects/Companion-Dev-Modules/pgpio-plus`, which no longer exists).
+- Git: `main` is clean and in sync with
+  `github.com/hwsysnet/companion-module-pgpio-pgpio-plus`. Tag `v1.4.1`
+  points to `ca9cfe4` (the last code change); the commits after it only
+  touch documentation.
+- `npm test` (22 tests), `npm run check`, ESLint with the Companion config
+  and prettier all pass.
+- `pgpio-pgpio-plus-1.4.1.tgz` is in the project root for in-house devices
+  (not in git; rebuild with `npm run package`).
+
+Next steps, in order:
+
+1. **Wait for the repository request review.** Answer questions on the
+   request page. The likely one is where the hardware can be obtained.
+2. **After approval**, accept the GitHub maintainer invitation, then push
+   the code to the new repository:
+
+   ```bash
+   git remote add bitfocus https://github.com/bitfocus/companion-module-pgpio-pgpio-plus.git
+   git push bitfocus main
+   git push bitfocus v1.4.1
+   ```
+
+   Check that the repository URLs in `package.json` and
+   `companion/manifest.json` and the PROTOCOL.md link in HELP.md now
+   resolve.
+
+3. **Submit the version** on the portal: _My Connections_ → the module →
+   _Submit Version_ → `v1.4.1`. Review feedback arrives on the portal; fixes
+   go out as `1.4.2` and so on, following [Releasing](#releasing).
+4. Independently of the release: the [Open items](#open-items) below (real
+   ATEM test, lifecycle smoke test).
+
 ## Releasing
 
 The module is published through the Bitfocus Developer Portal
